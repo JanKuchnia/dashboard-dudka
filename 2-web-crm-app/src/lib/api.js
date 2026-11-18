@@ -1,7 +1,7 @@
 // Jedno wspólne API dla całej aplikacji.
-// Z prawdziwymi kluczami w .env rozmawia z Supabase, bez nich używa trybu demo.
-import { supabase, isDemo } from './supabase';
-import { demoApi } from './demoApi';
+// Z prawdziwymi kluczami w .env rozmawia z Supabase, bez nich działa lokalnie (dane w przeglądarce).
+import { supabase, isLocal } from './supabase';
+import { localApi } from './localApi';
 
 /** Tłumaczy błędy Supabase na zrozumiałe komunikaty po polsku */
 export function translateError(error) {
@@ -142,11 +142,38 @@ const supabaseApi = {
     );
   },
 
+  // --- Import (Pozyskaj firmy) ---
+  async getExistingKeys() {
+    const rows = unwrap(await supabase.from('leads').select('maps_place_id,phone_normalized').limit(100000));
+    return {
+      placeIds: new Set(rows.map((r) => r.maps_place_id).filter(Boolean)),
+      phones: new Set(rows.map((r) => r.phone_normalized).filter(Boolean)),
+    };
+  },
+  async importLeads(items, source = 'import') {
+    const { phones } = await supabaseApi.getExistingKeys();
+    const fresh = items.filter((i) => {
+      const p = String(i.phone || '').replace(/\D/g, '').slice(-9);
+      return !p || !phones.has(p);
+    });
+    if (!fresh.length) return { inserted: [], skipped: items.length };
+    const inserted = unwrap(
+      await supabase
+        .from('leads')
+        .upsert(
+          fresh.map((i) => ({ ...i, source })),
+          { onConflict: 'maps_place_id', ignoreDuplicates: true },
+        )
+        .select(),
+    );
+    return { inserted, skipped: items.length - inserted.length };
+  },
+
   // --- Statystyki ---
   async getStats() {
     return unwrap(await supabase.rpc('get_dashboard_stats'));
   },
 };
 
-export const api = isDemo ? demoApi : supabaseApi;
-export { isDemo };
+export const api = isLocal ? localApi : supabaseApi;
+export { isLocal };

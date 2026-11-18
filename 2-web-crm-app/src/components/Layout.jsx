@@ -1,4 +1,4 @@
-import { PhoneCall, CalendarClock, LayoutDashboard, LogOut, FlaskConical, RotateCcw } from 'lucide-react';
+import { PhoneCall, CalendarClock, LayoutDashboard, LogOut, HardDrive, Radar } from 'lucide-react';
 import { APP_NAME } from '../lib/constants';
 import { classNames } from '../lib/format';
 
@@ -6,6 +6,7 @@ export const NAV = [
   { id: 'dialer', label: 'Tryb dzwonienia', short: 'Dzwonienie', icon: PhoneCall },
   { id: 'followups', label: 'Follow-upy', short: 'Follow-upy', icon: CalendarClock },
   { id: 'baza', label: 'Baza i statystyki', short: 'Baza', icon: LayoutDashboard },
+  { id: 'finder', label: 'Pozyskaj firmy', short: 'Pozyskaj', icon: Radar },
 ];
 
 function Logo() {
@@ -28,7 +29,7 @@ function badgeFor(id, stats) {
 }
 
 /** Główny układ: boczne menu (komputer) i dolny pasek (telefon) */
-export function Layout({ view, onNavigate, stats, user, demo, onSignOut, children }) {
+export function Layout({ view, onNavigate, stats, user, local, onSignOut, children }) {
   return (
     <div className="min-h-dvh lg:pl-64">
       {/* Boczne menu – komputer */}
@@ -81,44 +82,42 @@ export function Layout({ view, onNavigate, stats, user, demo, onSignOut, childre
         )}
 
         <div className="border-t border-zinc-200/80 p-3">
-          {demo && (
-            <div className="mb-2 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-              <FlaskConical className="size-3.5" />
-              Tryb demo – dane lokalne
+          {local ? (
+            <div className="flex items-start gap-2.5 rounded-lg px-2 py-1.5 text-xs text-zinc-500">
+              <HardDrive className="mt-0.5 size-4 shrink-0 text-zinc-400" />
+              <span>
+                <span className="block font-medium text-zinc-700">Tryb lokalny</span>
+                Dane zapisane w tej przeglądarce
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-2">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-xs font-semibold uppercase text-zinc-700">
+                {user?.email?.[0] ?? '?'}
+              </div>
+              <span className="min-w-0 flex-1 truncate text-xs text-zinc-600">{user?.email}</span>
+              <button onClick={onSignOut} className="btn-ghost p-2" title="Wyloguj" aria-label="Wyloguj">
+                <LogOut className="size-4" />
+              </button>
             </div>
           )}
-          <div className="flex items-center gap-2 px-2">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-xs font-semibold uppercase text-zinc-700">
-              {user?.email?.[0] ?? '?'}
-            </div>
-            <span className="min-w-0 flex-1 truncate text-xs text-zinc-600">{user?.email}</span>
-            <button
-              onClick={onSignOut}
-              className="btn-ghost p-2"
-              title={demo ? 'Resetuj dane demo' : 'Wyloguj'}
-              aria-label={demo ? 'Resetuj dane demo' : 'Wyloguj'}
-            >
-              {demo ? <RotateCcw className="size-4" /> : <LogOut className="size-4" />}
-            </button>
-          </div>
         </div>
       </aside>
 
       {/* Górny pasek – telefon */}
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-zinc-200/80 bg-white/85 px-4 backdrop-blur lg:hidden">
         <Logo />
-        <div className="flex items-center gap-1">
-          {demo && <span className="rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800">Demo</span>}
-          <button onClick={onSignOut} className="btn-ghost p-2" aria-label={demo ? 'Resetuj dane demo' : 'Wyloguj'}>
-            {demo ? <RotateCcw className="size-4" /> : <LogOut className="size-4" />}
+        {!local && (
+          <button onClick={onSignOut} className="btn-ghost p-2" aria-label="Wyloguj">
+            <LogOut className="size-4" />
           </button>
-        </div>
+        )}
       </header>
 
       <main className="mx-auto w-full max-w-7xl px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-10">{children}</main>
 
       {/* Dolny pasek nawigacji – telefon */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t border-zinc-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-zinc-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
         {NAV.map((item) => {
           const Icon = item.icon;
           const active = view === item.id;

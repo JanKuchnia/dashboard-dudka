@@ -60,7 +60,7 @@ function groupOf(lead) {
 }
 
 /** Lista firm „Do zastanowienia” posortowana po dacie kontaktu */
-export function FollowUps({ onDataChanged }) {
+export function FollowUps({ onDataChanged, dataVersion }) {
   const [leads, setLeads] = useState(null);
   const [error, setError] = useState('');
   const [calling, setCalling] = useState(null);
@@ -78,7 +78,7 @@ export function FollowUps({ onDataChanged }) {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, dataVersion]);
 
   const grouped = useMemo(() => {
     const g = { overdue: [], today: [], upcoming: [], nodate: [] };

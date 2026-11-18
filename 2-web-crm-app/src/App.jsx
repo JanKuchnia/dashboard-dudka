@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, isDemo } from './lib/api';
+import { api, isLocal } from './lib/api';
+import { CHANGE_EVENT } from './lib/localApi';
 import { Layout, NAV } from './components/Layout';
 import { FullScreenLoader } from './components/ui';
 import { Login } from './views/Login';
 import { PowerDialer } from './views/PowerDialer';
 import { FollowUps } from './views/FollowUps';
 import { Database } from './views/Database';
+import { Finder } from './views/Finder';
 import { APP_NAME } from './lib/constants';
 
 const VIEW_IDS = NAV.map((n) => n.id);
@@ -33,6 +35,7 @@ function useHashView() {
 export default function App() {
   const [session, setSession] = useState(undefined); // undefined = sprawdzanie sesji
   const [stats, setStats] = useState(null);
+  const [dataVersion, setDataVersion] = useState(0);
   const [view, navigate] = useHashView();
 
   // Sesja logowania
@@ -65,16 +68,29 @@ export default function App() {
     return () => clearInterval(t);
   }, [session, refreshStats]);
 
+  // Tryb lokalny: dane zmienione w innej karcie (albo przez wtyczkę) → odświeżamy widoki
+  useEffect(() => {
+    if (!isLocal) return undefined;
+    const onChange = () => {
+      setDataVersion((v) => v + 1);
+      refreshStats();
+    };
+    const onStorage = (e) => {
+      if (e.key === 'lead-crm-local-v1') onChange();
+    };
+    window.addEventListener(CHANGE_EVENT, onChange);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener(CHANGE_EVENT, onChange);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [refreshStats]);
+
   // Tytuł karty przeglądarki
   useEffect(() => {
     const label = NAV.find((n) => n.id === view)?.label;
     document.title = label ? `${label} · ${APP_NAME}` : APP_NAME;
   }, [view]);
-
-  const signOut = async () => {
-    if (isDemo && !window.confirm('Zresetować dane demo do stanu początkowego?')) return;
-    await api.signOut();
-  };
 
   if (session === undefined) return <FullScreenLoader />;
   if (!session) return <Login />;
@@ -85,12 +101,17 @@ export default function App() {
       onNavigate={navigate}
       stats={stats}
       user={session.user}
-      demo={isDemo}
-      onSignOut={signOut}
+      local={isLocal}
+      onSignOut={() => api.signOut()}
     >
-      {view === 'dialer' && <PowerDialer stats={stats} onDataChanged={refreshStats} />}
-      {view === 'followups' && <FollowUps onDataChanged={refreshStats} />}
-      {view === 'baza' && <Database stats={stats} onDataChanged={refreshStats} />}
+      {view === 'dialer' && (
+        <PowerDialer stats={stats} onDataChanged={refreshStats} onNavigate={navigate} dataVersion={dataVersion} />
+      )}
+      {view === 'followups' && <FollowUps onDataChanged={refreshStats} dataVersion={dataVersion} />}
+      {view === 'baza' && (
+        <Database stats={stats} onDataChanged={refreshStats} onNavigate={navigate} dataVersion={dataVersion} />
+      )}
+      {view === 'finder' && <Finder onDataChanged={refreshStats} onNavigate={navigate} />}
     </Layout>
   );
 }

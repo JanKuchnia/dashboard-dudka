@@ -12,6 +12,7 @@ import {
   Star,
   Building2,
   AlertTriangle,
+  Radar,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { KpiBar } from '../components/KpiBar';
@@ -89,7 +90,7 @@ function downloadCsv(rows) {
   URL.revokeObjectURL(url);
 }
 
-export function Database({ stats, onDataChanged }) {
+export function Database({ stats, onDataChanged, onNavigate, dataVersion }) {
   const toast = useToast();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
@@ -125,7 +126,7 @@ export function Database({ stats, onDataChanged }) {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, dataVersion]);
 
   useEffect(() => {
     api.fetchCities().then(setCities).catch(() => {});
@@ -251,7 +252,15 @@ export function Database({ stats, onDataChanged }) {
             description={
               hasFilters
                 ? 'Zmień filtry albo wyszukiwaną frazę.'
-                : 'Dodaj firmy przez wtyczkę Chrome z Map Google albo ręcznie przyciskiem „Dodaj firmę”.'
+                : 'Pobierz prawdziwe firmy z okolicy albo dodaj firmę ręcznie przyciskiem „Dodaj firmę”.'
+            }
+            action={
+              !hasFilters && (
+                <button onClick={() => onNavigate?.('finder')} className="btn-primary">
+                  <Radar className="size-4" />
+                  Pozyskaj firmy
+                </button>
+              )
             }
           />
         ) : (

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { PartyPopper, RefreshCw, Undo2, Keyboard, AlertTriangle } from 'lucide-react';
+import { PartyPopper, RefreshCw, Undo2, Keyboard, AlertTriangle, Radar } from 'lucide-react';
 import { api } from '../lib/api';
 import { LeadSummary } from '../components/LeadSummary';
 import { CallForm } from '../components/CallForm';
@@ -7,7 +7,7 @@ import { EmptyState, Spinner, Kbd } from '../components/ui';
 import { useToast } from '../components/Toast';
 
 /** Tryb dzwonienia – jedna firma naraz, zapis i automatycznie następna */
-export function PowerDialer({ stats, onDataChanged }) {
+export function PowerDialer({ stats, onDataChanged, onNavigate, dataVersion }) {
   const toast = useToast();
   const [lead, setLead] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -34,6 +34,13 @@ export function PowerDialer({ stats, onDataChanged }) {
   useEffect(() => {
     loadNext();
   }, [loadNext]);
+
+  // Pusta kolejka, a w tle doszły nowe firmy (np. z wtyczki) → pobierz od razu
+  const leadRef = useRef(null);
+  leadRef.current = lead;
+  useEffect(() => {
+    if (dataVersion && !leadRef.current) loadNext();
+  }, [dataVersion, loadNext]);
 
   const handleSaved = useCallback(() => {
     setSessionCalls((n) => n + 1);
@@ -118,10 +125,16 @@ export function PowerDialer({ stats, onDataChanged }) {
             description={
               skippedCount > 0
                 ? `Zostały tylko pominięte firmy (${skippedCount}). Możesz do nich wrócić.`
-                : 'Wszystkie firmy zostały obdzwonione. Dodaj nowe przez wtyczkę Chrome albo ręcznie w zakładce Baza.'
+                : 'Nie ma firm do obdzwonienia. Pobierz prawdziwe firmy z okolicy w zakładce „Pozyskaj firmy”.'
             }
             action={
               <div className="flex flex-wrap justify-center gap-2">
+                {skippedCount === 0 && (
+                  <button onClick={() => onNavigate?.('finder')} className="btn-primary">
+                    <Radar className="size-4" />
+                    Pozyskaj firmy
+                  </button>
+                )}
                 {skippedCount > 0 && (
                   <button onClick={resetSkipped} className="btn-primary">
                     <Undo2 className="size-4" />
