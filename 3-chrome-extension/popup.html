@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Lead Scanner</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        width: 340px;
+        margin: 0;
+        background: #fafafa;
+        color: #18181b;
+        font-family: "Inter", "Segoe UI", Roboto, Arial, sans-serif;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 16px;
+        border-bottom: 1px solid #e4e4e7;
+        background: #fff;
+      }
+      .logo {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        background: linear-gradient(135deg, #6366f1, #7c3aed);
+        color: #fff;
+        font-size: 16px;
+        box-shadow: 0 4px 10px -2px rgba(99, 102, 241, 0.45);
+      }
+      h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+      .sub { margin: 0; color: #71717a; font-size: 12px; }
+      main { padding: 16px; }
+      .hidden { display: none !important; }
+      label { display: block; margin: 0 0 4px; color: #52525b; font-size: 11px; font-weight: 600; }
+      input {
+        width: 100%;
+        margin-bottom: 12px;
+        padding: 8px 10px;
+        border: 1px solid #e4e4e7;
+        border-radius: 8px;
+        background: #fff;
+        color: #18181b;
+        font: inherit;
+        outline: none;
+      }
+      input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15); }
+      button, .btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        width: 100%;
+        padding: 10px 12px;
+        border: 0;
+        border-radius: 9px;
+        background: #18181b;
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      button:hover, .btn:hover { background: #27272a; }
+      button:disabled { opacity: 0.5; cursor: default; }
+      .secondary { background: #fff; color: #3f3f46; border: 1px solid #e4e4e7; }
+      .secondary:hover { background: #f4f4f5; }
+      .accent { background: #4f46e5; }
+      .accent:hover { background: #4338ca; }
+      .link {
+        width: auto;
+        padding: 0;
+        background: none;
+        color: #71717a;
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .link:hover { background: none; color: #18181b; text-decoration: underline; }
+      .stack > * + * { margin-top: 8px; }
+      .card {
+        padding: 12px;
+        border: 1px solid #e4e4e7;
+        border-radius: 12px;
+        background: #fff;
+      }
+      .user { display: flex; align-items: center; gap: 10px; }
+      .avatar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        background: #e4e4e7;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+      .ok { color: #047857; font-size: 11px; font-weight: 600; }
+      .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 12px 0; }
+      .stat { padding: 8px 4px; border-radius: 10px; background: #fff; border: 1px solid #e4e4e7; text-align: center; }
+      .stat b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
+      .stat span { color: #71717a; font-size: 10.5px; }
+      .msg { margin-top: 10px; padding: 8px 10px; border-radius: 8px; font-size: 12px; }
+      .msg.error { background: #fff1f2; color: #be123c; }
+      .msg.success { background: #ecfdf5; color: #047857; }
+      .help { margin: 0 0 12px; color: #71717a; font-size: 12px; }
+      .footer { display: flex; justify-content: space-between; margin-top: 14px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="logo">☎</div>
+      <div>
+        <h1>Lead Scanner</h1>
+        <p class="sub">Mapy Google → CRM</p>
+      </div>
+    </header>
+
+    <main>
+      <!-- Ustawienia połączenia -->
+      <section id="view-config" class="hidden">
+        <p class="help">
+          Wpisz dane z Supabase (przycisk <b>Connect</b> albo <b>Project Settings → API Keys</b>).
+        </p>
+        <label for="cfg-url">Project URL</label>
+        <input id="cfg-url" type="url" placeholder="https://xxxx.supabase.co" />
+        <label for="cfg-key">Klucz publishable / anon</label>
+        <input id="cfg-key" type="text" placeholder="sb_publishable_… lub eyJ…" />
+        <label for="cfg-crm">Adres panelu CRM (opcjonalnie)</label>
+        <input id="cfg-crm" type="url" placeholder="https://twoj-crm.vercel.app" />
+        <button id="btn-save-config">Zapisz ustawienia</button>
+        <div class="footer">
+          <button id="btn-cancel-config" class="link hidden">← Wróć</button>
+        </div>
+      </section>
+
+      <!-- Logowanie -->
+      <section id="view-login" class="hidden">
+        <p class="help">Zaloguj się tym samym kontem co w panelu CRM.</p>
+        <form id="login-form">
+          <label for="login-email">E-mail</label>
+          <input id="login-email" type="email" autocomplete="email" required />
+          <label for="login-password">Hasło</label>
+          <input id="login-password" type="password" autocomplete="current-password" required />
+          <button id="btn-login" type="submit">Zaloguj się</button>
+        </form>
+        <div class="footer">
+          <button id="btn-edit-config-1" class="link">Ustawienia połączenia</button>
+        </div>
+      </section>
+
+      <!-- Zalogowany -->
+      <section id="view-main" class="hidden">
+        <div class="card user">
+          <div class="avatar" id="user-avatar">?</div>
+          <div>
+            <div id="user-email" style="font-weight: 600"></div>
+            <div class="ok">● Połączono z CRM</div>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><b id="st-queue">–</b><span>w kolejce</span></div>
+          <div class="stat"><b id="st-today">–</b><span>rozmów dziś</span></div>
+          <div class="stat"><b id="st-int">–</b><span>chcą</span></div>
+        </div>
+
+        <div class="stack">
+          <a class="btn accent" href="https://www.google.com/maps" target="_blank" id="btn-maps">🗺️ Otwórz Mapy Google</a>
+          <a class="btn secondary hidden" target="_blank" id="btn-crm">Otwórz panel CRM</a>
+        </div>
+        <p class="help" style="margin: 12px 0 0">
+          Wyszukaj w Mapach np. <b>„fryzjer Kraków”</b>. Firmy bez strony zostaną podświetlone, a w prawym dolnym
+          rogu pojawi się panel do wysyłki.
+        </p>
+        <div class="footer">
+          <button id="btn-edit-config-2" class="link">Ustawienia</button>
+          <button id="btn-logout" class="link">Wyloguj</button>
+        </div>
+      </section>
+
+      <div id="msg" class="msg hidden"></div>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

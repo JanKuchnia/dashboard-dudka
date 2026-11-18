@@ -1,0 +1,3 @@
+# Prywatny panel firmy – nie indeksujemy
+User-agent: *
+Disallow: /

@@ -1,0 +1,18 @@
+# Konfiguracja dla Netlify (Base directory: 2-web-crm-app)
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Bezpieczne nagłówki dla prywatnego panelu
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
