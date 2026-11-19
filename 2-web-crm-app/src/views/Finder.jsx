@@ -89,18 +89,15 @@ export function Finder({ onDataChanged, onNavigate }) {
       setProgress('Szukam miejsca na mapie…');
       const geo = await geocode(place.trim());
       setCenter(geo);
-      const [found, keys] = await Promise.all([
-        searchBusinesses({
-          lat: geo.lat,
-          lon: geo.lon,
-          radius: radius * 1000,
-          categoryIds: cats,
-          fallbackCity: geo.city,
-          onProgress: setProgress,
-        }),
-        api.getExistingKeys(),
-      ]);
-      setExisting(keys);
+      const found = await searchBusinesses({
+        lat: geo.lat,
+        lon: geo.lon,
+        radius: radius * 1000,
+        categoryIds: cats,
+        fallbackCity: geo.city,
+        onProgress: setProgress,
+      });
+      setExisting(await api.getExistingKeys(found));
       setResults(found);
     } catch (err) {
       setError(err.message);
@@ -125,7 +122,7 @@ export function Finder({ onDataChanged, onNavigate }) {
     setImporting(true);
     try {
       const { inserted, skipped } = await api.importLeads(chosen.map(toLeadRecord), 'openstreetmap');
-      setExisting(await api.getExistingKeys());
+      setExisting(await api.getExistingKeys(results));
       setSelected(new Set());
       onDataChanged?.();
       toast({

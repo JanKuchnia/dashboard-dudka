@@ -7,11 +7,10 @@
 --  (np. po aktualizacji), nie usunie żadnych danych.
 --
 --  Model bezpieczeństwa:
---    • Dostęp do danych mają WYŁĄCZNIE zalogowani użytkownicy (rola
---      "authenticated"). Klucz anon/publishable sam w sobie NIE daje
---      dostępu do leadów – trzeba się zalogować (panel CRM i wtyczka
---      będą miały ekran logowania).
---    • Wszyscy zalogowani członkowie zespołu widzą i edytują wspólną bazę.
+--    • Dostęp do danych mają WYŁĄCZNIE zalogowani użytkownicy, których
+--      e-mail jest w tabeli team_members. Klucz anon/publishable ani samo
+--      założenie konta NIE dają dostępu do leadów.
+--    • Wszyscy członkowie zespołu widzą i edytują wspólną bazę.
 --    • Skrypty integracji (Google Sheets / Kontakty Google) w Etapie 4
 --      będą używać klucza service_role, który omija RLS – trzymamy go
 --      tylko po stronie serwera (Apps Script / Edge Function).
@@ -237,6 +236,13 @@ as $$
 declare
   v_id uuid;
 begin
+  -- Pominięte firmy oddajemy reszcie zespołu od razu, a nie po 15 minutach
+  update public.leads
+     set claimed_by = null,
+         claimed_at = null
+   where id = any (coalesce(p_skip, '{}'))
+     and claimed_by = auth.uid();
+
   select l.id
     into v_id
     from public.leads l
@@ -384,30 +390,73 @@ select id                          as "ID",
   from public.leads
  order by created_at desc;
 
+-- 7c. Lista miast do filtra w panelu (bez pobierania wszystkich leadów).
+create or replace view public.v_cities
+with (security_invoker = true) as
+select distinct city
+  from public.leads
+ where city is not null and city <> '';
+
 
 -- ---------------------------------------------------------------------
 -- 8. ROW LEVEL SECURITY (RLS)
 -- ---------------------------------------------------------------------
+
+-- 8a. Lista członków zespołu. Samo konto w Supabase nie wystarcza –
+--     e-mail musi być na tej liście. Dzięki temu nawet przy włączonej
+--     rejestracji obca osoba nic nie odczyta ani nie usunie.
+--     Dodanie osoby: insert into public.team_members (email) values ('jan@firma.pl');
+create table if not exists public.team_members (
+  email      text primary key check (email = lower(email)),
+  created_at timestamptz not null default now()
+);
+alter table public.team_members enable row level security;
+revoke all on public.team_members from anon, authenticated;
+
+-- Tylko gdy lista jest pusta (pierwsze uruchomienie): wpisujemy obecnych
+-- użytkowników, żeby nikt z zespołu nie stracił dostępu. Sprawdź tę listę
+-- w Table Editor i usuń obce adresy!
+insert into public.team_members (email)
+select lower(email) from auth.users
+ where email is not null
+   and not exists (select 1 from public.team_members)
+on conflict do nothing;
+
+create or replace function public.is_team_member()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.team_members
+     where email = lower(auth.jwt() ->> 'email')
+  );
+$$;
+revoke execute on function public.is_team_member() from public, anon;
+grant  execute on function public.is_team_member() to authenticated;
+
 alter table public.leads     enable row level security;
 alter table public.call_logs enable row level security;
 
--- leads: pełny dostęp dla zalogowanego zespołu
+-- leads: pełny dostęp dla zespołu
 drop policy if exists "Zespół – odczyt leadów"     on public.leads;
 drop policy if exists "Zespół – dodawanie leadów"  on public.leads;
 drop policy if exists "Zespół – edycja leadów"     on public.leads;
 drop policy if exists "Zespół – usuwanie leadów"   on public.leads;
 
-create policy "Zespół – odczyt leadów"    on public.leads for select to authenticated using (true);
-create policy "Zespół – dodawanie leadów" on public.leads for insert to authenticated with check (true);
-create policy "Zespół – edycja leadów"    on public.leads for update to authenticated using (true) with check (true);
-create policy "Zespół – usuwanie leadów"  on public.leads for delete to authenticated using (true);
+create policy "Zespół – odczyt leadów"    on public.leads for select to authenticated using ((select public.is_team_member()));
+create policy "Zespół – dodawanie leadów" on public.leads for insert to authenticated with check ((select public.is_team_member()));
+create policy "Zespół – edycja leadów"    on public.leads for update to authenticated using ((select public.is_team_member())) with check ((select public.is_team_member()));
+create policy "Zespół – usuwanie leadów"  on public.leads for delete to authenticated using ((select public.is_team_member()));
 
 -- call_logs: odczyt + dopisywanie (historii się nie edytuje)
 drop policy if exists "Zespół – odczyt historii"  on public.call_logs;
 drop policy if exists "Zespół – zapis historii"   on public.call_logs;
 
-create policy "Zespół – odczyt historii" on public.call_logs for select to authenticated using (true);
-create policy "Zespół – zapis historii"  on public.call_logs for insert to authenticated with check (true);
+create policy "Zespół – odczyt historii" on public.call_logs for select to authenticated using ((select public.is_team_member()));
+create policy "Zespół – zapis historii"  on public.call_logs for insert to authenticated with check ((select public.is_team_member()));
 
 
 -- ---------------------------------------------------------------------
@@ -415,11 +464,11 @@ create policy "Zespół – zapis historii"  on public.call_logs for insert to a
 --    Anonim (bez logowania) nie ma dostępu do niczego.
 -- ---------------------------------------------------------------------
 revoke all on public.leads, public.call_logs                          from anon;
-revoke all on public.v_google_contacts_queue, public.v_sheets_export  from anon;
+revoke all on public.v_google_contacts_queue, public.v_sheets_export, public.v_cities from anon;
 
 grant select, insert, update, delete on public.leads                  to authenticated;
 grant select, insert                 on public.call_logs              to authenticated;
-grant select on public.v_google_contacts_queue, public.v_sheets_export to authenticated;
+grant select on public.v_google_contacts_queue, public.v_sheets_export, public.v_cities to authenticated;
 
 revoke execute on function public.normalize_phone(text)                    from public, anon;
 revoke execute on function public.log_call(uuid, text, text, date)         from public, anon;

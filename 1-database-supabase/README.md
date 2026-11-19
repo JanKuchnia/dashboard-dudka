@@ -21,8 +21,11 @@ Sprawdź w **Table Editor**, czy są tabele `leads` i `call_logs`.
 Dane są chronione przez RLS, więc dostęp mają tylko zalogowani użytkownicy.
 1. **Authentication** → **Users** → **Add user** → **Create new user**.
 2. Wpisz e-mail i hasło i zaznacz **Auto Confirm User**.
-3. Powtórz dla każdej osoby, która będzie dzwonić.
-4. **Ważne:** **Authentication** → **Sign In / Providers** → wyłącz **Allow new users to sign up**. Dzięki temu nikt obcy nie założy sobie konta.
+3. Dodaj jej e-mail do listy zespołu: **SQL Editor** → `insert into public.team_members (email) values ('jan@firma.pl');` (małymi literami). Bez tego konto nic nie zobaczy.
+4. Powtórz dla każdej osoby, która będzie dzwonić.
+5. **Ważne:** **Authentication** → **Sign In / Providers** → wyłącz **Allow new users to sign up**. Dzięki temu nikt obcy nie założy sobie konta.
+
+> Przy pierwszym uruchomieniu `schema.sql` wpisuje do `team_members` wszystkie istniejące konta. Sprawdź tę tabelę w **Table Editor** i usuń adresy, których nie znasz.
 
 ## 4. Skopiuj klucze API (ok. 30 s)
 Kliknij przycisk **Connect** na górze projektu albo wejdź w **Project Settings → API Keys** i **Data API**:
@@ -49,6 +52,8 @@ Kliknij przycisk **Connect** na górze projektu albo wejdź w **Project Settings
 | `find_duplicates()` | RPC dla wtyczki: które firmy z Map już są w bazie (po `place_id` lub telefonie) |
 | `v_google_contacts_queue` | Leady „Chcą” i „Do zastanowienia” czekające na dodanie do Kontaktów Google (Etap 4) |
 | `v_sheets_export` | Płaski widok z polskimi nagłówkami do Google Sheets (Etap 4) |
+| `v_cities` | Lista miast do filtra w panelu |
+| `team_members` | E-maile osób z dostępem do danych (bez wpisu konto nic nie widzi) |
 
 **Statusy leada:** `NOWY` → `CHCA` / `DO_ZASTANOWIENIA` / `NIE_CHCA`
 **Status strony:** `BRAK_WWW`, `TYLKO_FB`, `TYLKO_IG`, `TYLKO_BOOKSY`, `INNE_SOCIAL`, `MA_WWW`
