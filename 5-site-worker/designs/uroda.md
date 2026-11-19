@@ -28,7 +28,7 @@ Hair and beauty salon. Warm, elegant, personal. The page should feel like walkin
 Large serif headings with generous line height; quiet sans-serif body text. Salon name set big in the hero.
 
 ## Layout
-- Hero: large photo of hair or nail work beside or behind the salon name, one call button with the phone number.
+- Hero: large photo of hair or nail work behind the salon name, one call button with the phone number.
 - Services as a simple list with short descriptions (prices only if known), not icon cards.
 - A gallery strip of 3–4 photos of the work.
 - Opening hours and address side by side near the bottom, contact easy to find.
