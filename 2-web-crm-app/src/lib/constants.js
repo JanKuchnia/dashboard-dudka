@@ -79,3 +79,33 @@ export const WEBSITE_STATUS = {
 export const APP_NAME = import.meta.env.VITE_APP_NAME || 'Lead CRM';
 
 export const PAGE_SIZE = 50;
+
+// Etapy sprzedaży po „Chcą”
+export const DEAL_STAGE = {
+  SPOTKANIE: { label: 'Spotkanie', badge: 'bg-sky-50 text-sky-700 ring-sky-600/20' },
+  OFERTA: { label: 'Oferta wysłana', badge: 'bg-violet-50 text-violet-700 ring-violet-600/20' },
+  WYGRANA: { label: 'Wygrana', badge: 'bg-emerald-600 text-white ring-emerald-700' },
+  PRZEGRANA: { label: 'Przegrana', badge: 'bg-zinc-100 text-zinc-500 ring-zinc-500/20' },
+};
+
+// Skrypt rozmowy w Power Dialerze – dopasowany do statusu strony. Zmieniaj śmiało.
+const OBJECTIONS = [
+  ['Nie mam czasu', 'Rozumiem, zajmie to 2 minuty. Mogę wysłać SMS-a z przykładem i oddzwonić, kiedy będzie Panu/Pani wygodnie?'],
+  ['To za drogo', 'Strona zwraca się, gdy przyniesie kilku nowych klientów. Mogę przygotować wycenę dopasowaną do budżetu.'],
+  ['Mam już Facebooka', 'Facebook jest super, ale klienci szukają w Google. Strona sprawia, że to Państwa znajdą, a nie konkurencję.'],
+  ['Nie potrzebuję', 'Rozumiem. Mogę zapytać, skąd dziś przychodzą do Państwa nowi klienci?'],
+];
+const opener = (hook) =>
+  `Dzień dobry, dzwonię w sprawie Państwa wizytówki w Google. ${hook} Robimy proste strony dla lokalnych firm. Czy mogę zająć minutę?`;
+export const SALES_SCRIPTS = {
+  BRAK_WWW: { opener: opener('Zauważyłem, że firma ma świetne opinie, ale nie ma strony internetowej.'), objections: OBJECTIONS },
+  TYLKO_FB: { opener: opener('Widzę, że prowadzą Państwo Facebooka, ale z Google klienci nie trafiają na żadną stronę.'), objections: OBJECTIONS },
+  TYLKO_IG: { opener: opener('Widzę ładny profil na Instagramie, ale w Google nie ma strony, na którą klient może wejść.'), objections: OBJECTIONS },
+  TYLKO_BOOKSY: { opener: opener('Widzę, że rezerwacje idą przez Booksy. Własna strona dałaby Państwu klientów bez prowizji.'), objections: OBJECTIONS },
+  INNE_SOCIAL: { opener: opener('Wizytówka prowadzi do profilu społecznościowego, a nie do własnej strony.'), objections: OBJECTIONS },
+  MA_WWW: { opener: opener('Przejrzałem Państwa stronę i mam kilka pomysłów, jak mogłaby przynosić więcej zapytań.'), objections: OBJECTIONS },
+};
+
+/** Wiadomość po rozmowie (SMS / WhatsApp) */
+export const followUpMessage = (lead) =>
+  `Dzień dobry, dziękuję za rozmowę! Zgodnie z ustaleniami przesyłam kontakt w sprawie strony internetowej dla ${lead.company_name}. W razie pytań proszę pisać lub dzwonić. Pozdrawiam`;

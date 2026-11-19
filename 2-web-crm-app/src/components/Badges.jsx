@@ -1,5 +1,5 @@
-import { LEAD_STATUS, WEBSITE_STATUS } from '../lib/constants';
-import { classNames } from '../lib/format';
+import { LEAD_STATUS, WEBSITE_STATUS, DEAL_STAGE } from '../lib/constants';
+import { classNames, formatPLN } from '../lib/format';
 
 /** Plakietka statusu leada (Nowy / Chcą / Do zastanowienia / Nie chcą) */
 export function StatusBadge({ status, className }) {
@@ -14,6 +14,18 @@ export function StatusBadge({ status, className }) {
     >
       <span className={classNames('size-1.5 rounded-full', s.dot)} />
       {s.label}
+    </span>
+  );
+}
+
+/** Plakietka etapu sprzedaży (Spotkanie / Oferta / Wygrana / Przegrana) */
+export function DealBadge({ stage, value }) {
+  const d = DEAL_STAGE[stage];
+  if (!d) return null;
+  return (
+    <span className={classNames('inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset', d.badge)}>
+      {d.label}
+      {value ? <span className="tabular-nums opacity-80">· {formatPLN(value)}</span> : null}
     </span>
   );
 }

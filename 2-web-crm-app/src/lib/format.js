@@ -92,6 +92,19 @@ export function telHref(phone) {
   return d.length === 9 ? `tel:+48${d}` : `tel:${d}`;
 }
 
+/** Link sms: z gotową treścią */
+export function smsHref(phone, text) {
+  const t = telHref(phone);
+  return t && `sms:${t.slice(4)}?body=${encodeURIComponent(text)}`;
+}
+
+/** Link do WhatsAppa z gotową treścią (numer z prefiksem kraju, bez +) */
+export function whatsappHref(phone, text) {
+  const d = normalizePhone(phone);
+  if (!d) return undefined;
+  return `https://wa.me/${d.length === 9 ? `48${d}` : d}?text=${encodeURIComponent(text)}`;
+}
+
 /** Link do wizytówki w Mapach Google (lub wyszukiwanie po nazwie i mieście) */
 export function mapsLink(lead) {
   if (lead?.maps_url) return lead.maps_url;
@@ -123,4 +136,54 @@ export function noAnswerPatch(lead, misses, followUpAt, now = new Date()) {
   if (lead.status === 'NIE_ODEBRAL') return { status: 'NIE_ODEBRAL', retry_at: null, follow_up_at: followUpAt || null };
   const tomorrow = addDays(toISODate(now), 1);
   return { status: lead.status, retry_at: null, follow_up_at: followUpAt && followUpAt > tomorrow ? followUpAt : tomorrow };
+}
+
+/**
+ * Kolejność kolejki: najpierw firmy bez własnej strony, potem z większą liczbą opinii,
+ * potem najstarsze. Ta sama kolejność jest w claim_next_lead w SQL – zmieniaj je razem.
+ */
+export function queueOrder(a, b) {
+  const hot = (l) => (l.website_status === 'MA_WWW' ? 0 : 1);
+  return (
+    hot(b) - hot(a) ||
+    (b.google_reviews_count ?? 0) - (a.google_reviews_count ?? 0) ||
+    String(a.created_at).localeCompare(String(b.created_at))
+  );
+}
+
+/** Kwota w złotych: 12500 → "12 500 zł" */
+export function formatPLN(v) {
+  return `${Number(v || 0).toLocaleString('pl-PL', { maximumFractionDigits: 0 })} zł`;
+}
+
+/**
+ * Zlicza rozmowy do strony „Statystyki”.
+ * rows = [{ created_at, outcome, email }] → po osobie, po dniu i po godzinie.
+ * Odebrane = wszystko poza „Nie odebrał”, skuteczność = Chcą / odebrane.
+ */
+export function summarizeCalls(rows) {
+  const bump = (map, key) => {
+    const s = map.get(key) ?? { key, calls: 0, answered: 0, won: 0 };
+    s.calls++;
+    map.set(key, s);
+    return s;
+  };
+  const byUser = new Map();
+  const byDay = new Map();
+  const byHour = new Map();
+  for (const r of rows) {
+    const d = new Date(r.created_at);
+    const answered = r.outcome !== 'NIE_ODEBRAL';
+    const won = r.outcome === 'CHCA';
+    for (const s of [bump(byUser, r.email || '—'), bump(byDay, toISODate(d)), bump(byHour, d.getHours())]) {
+      if (answered) s.answered++;
+      if (won) s.won++;
+    }
+  }
+  const list = (m) => [...m.values()];
+  return {
+    byUser: list(byUser).sort((a, b) => b.calls - a.calls),
+    byDay: list(byDay).sort((a, b) => a.key.localeCompare(b.key)),
+    byHour: list(byHour).sort((a, b) => a.key - b.key),
+  };
 }

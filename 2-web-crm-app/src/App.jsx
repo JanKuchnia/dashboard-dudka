@@ -9,6 +9,7 @@ import { PowerDialer } from './views/PowerDialer';
 import { FollowUps } from './views/FollowUps';
 import { Database } from './views/Database';
 import { Finder } from './views/Finder';
+import { Stats } from './views/Stats';
 import { APP_NAME } from './lib/constants';
 
 const VIEW_IDS = NAV.map((n) => n.id);
@@ -132,6 +133,7 @@ export default function App() {
       {view === 'baza' && (
         <Database stats={stats} onDataChanged={refreshStats} onNavigate={navigate} dataVersion={dataVersion} />
       )}
+      {view === 'stats' && <Stats dataVersion={dataVersion} />}
       {view === 'finder' && <Finder onDataChanged={refreshStats} onNavigate={navigate} />}
     </Layout>
   );

@@ -113,6 +113,10 @@ alter table public.leads add column if not exists claimed_by uuid references aut
 alter table public.leads add column if not exists claimed_at timestamptz;
 -- „Nie odebrał” – lead wraca do kolejki dopiero po tym czasie
 alter table public.leads add column if not exists retry_at timestamptz;
+-- Co dalej po „Chcą”: spotkanie → oferta → wygrana / przegrana, z wartością w PLN
+alter table public.leads add column if not exists deal_stage text
+  check (deal_stage in ('SPOTKANIE', 'OFERTA', 'WYGRANA', 'PRZEGRANA'));
+alter table public.leads add column if not exists deal_value numeric(12,2) check (deal_value >= 0);
 
 -- Nowe statusy dla baz założonych wcześniej (CHECK w create table się nie zaktualizuje)
 alter table public.leads drop constraint if exists leads_status_check;
@@ -261,7 +265,13 @@ $$;
 --      Pobiera najstarszego leada "NOWY", którego nikt inny teraz nie obsługuje,
 --      i blokuje go dla bieżącego użytkownika na 15 minut.
 --      p_skip – lista id pominiętych w tej sesji (przycisk „Pomiń”).
-create or replace function public.claim_next_lead(p_skip uuid[] default '{}')
+-- Stara wersja miała tylko p_skip – usuwamy ją, żeby nie było dwóch funkcji o tej nazwie
+drop function if exists public.claim_next_lead(uuid[]);
+create or replace function public.claim_next_lead(
+  p_skip     uuid[] default '{}',
+  p_city     text   default null,   -- tylko to miasto
+  p_category text   default null    -- fragment kategorii, np. „fryz”
+)
 returns setof public.leads
 language plpgsql
 security invoker
@@ -285,12 +295,18 @@ begin
           or (l.status = 'NIE_ODEBRAL' and l.last_called_at <= now() - interval '14 days'))
      and (l.retry_at is null or l.retry_at <= now())
      and l.id <> all (coalesce(p_skip, '{}'))
+     and (p_city is null or l.city = p_city)
+     and (p_category is null or l.category ilike '%' || p_category || '%')
      and (
            l.claimed_at is null
         or l.claimed_at < now() - interval '15 minutes'
         or l.claimed_by = auth.uid()
      )
-   order by l.created_at, l.id
+   -- Najpierw firmy bez strony z dużą liczbą opinii (ruchliwy biznes bez WWW).
+   -- Ta sama kolejność jest w queueOrder w format.js – zmieniaj je razem.
+   order by (l.website_status <> 'MA_WWW') desc,
+            coalesce(l.google_reviews_count, 0) desc,
+            l.created_at, l.id
    limit 1
    for update skip locked;
 
@@ -352,7 +368,11 @@ as $$
     -- follow-upy zaplanowane na dziś lub zaległe
     'followups_due',     (select count(*) from public.leads
                            where status in ('DO_ZASTANOWIENIA', 'CHCA')
-                             and follow_up_at <= (now() at time zone p_tz)::date)
+                             and follow_up_at <= (now() at time zone p_tz)::date),
+    -- sprzedaż po „Chcą”
+    'won_count',         (select count(*) from public.leads where deal_stage = 'WYGRANA'),
+    'won_value',         (select coalesce(sum(deal_value), 0) from public.leads where deal_stage = 'WYGRANA'),
+    'pipeline_value',    (select coalesce(sum(deal_value), 0) from public.leads where deal_stage in ('SPOTKANIE', 'OFERTA'))
   );
 $$;
 
@@ -380,6 +400,68 @@ as $$
       or l.phone_normalized = any (
            select public.normalize_phone(x) from unnest(coalesce(p_phones, '{}')) as x
          );
+$$;
+
+
+-- 6d. Cofnięcie ostatniego zapisu w Power Dialerze (kliknięty zły wynik).
+--     Usuwa ostatni wpis bieżącego użytkownika (max 15 min) i przywraca leada
+--     do stanu sprzed rozmowy (p_prev = lead przed zapisem).
+--     security definer, bo zespół nie ma prawa usuwać historii bezpośrednio.
+create or replace function public.undo_call(p_lead_id uuid, p_prev jsonb)
+returns public.leads
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_log  bigint;
+  v_lead public.leads;
+begin
+  if not public.is_team_member() then
+    raise exception 'Brak uprawnień';
+  end if;
+
+  select id into v_log
+    from public.call_logs
+   where lead_id = p_lead_id
+     and user_id = auth.uid()
+     and created_at > now() - interval '15 minutes'
+   order by created_at desc
+   limit 1;
+  if v_log is null then
+    raise exception 'Nie ma czego cofnąć (minęło ponad 15 minut).';
+  end if;
+
+  delete from public.call_logs where id = v_log;
+
+  update public.leads
+     set status         = coalesce(p_prev ->> 'status', status),
+         notes          = p_prev ->> 'notes',
+         follow_up_at   = (p_prev ->> 'follow_up_at')::date,
+         retry_at       = (p_prev ->> 'retry_at')::timestamptz,
+         last_called_at = (p_prev ->> 'last_called_at')::timestamptz,
+         call_count     = greatest(call_count - 1, 0)
+   where id = p_lead_id
+  returning * into v_lead;
+  return v_lead;
+end;
+$$;
+
+-- 6e. Historia rozmów z e-mailem osoby dzwoniącej – do strony „Statystyki”.
+--     security definer, bo e-maile są w auth.users.
+create or replace function public.call_feed(p_since timestamptz)
+returns table (created_at timestamptz, outcome text, lead_id uuid, email text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select c.created_at, c.outcome, c.lead_id, u.email::text
+    from public.call_logs c
+    left join auth.users u on u.id = c.user_id
+   where c.created_at >= p_since
+     and public.is_team_member()
+   order by c.created_at;
 $$;
 
 
@@ -511,8 +593,12 @@ grant select on public.v_google_contacts_queue, public.v_sheets_export, public.v
 
 revoke execute on function public.normalize_phone(text)                    from public, anon;
 revoke execute on function public.log_call(uuid, text, text, date)         from public, anon;
-revoke execute on function public.claim_next_lead(uuid[])                  from public, anon;
-grant  execute on function public.claim_next_lead(uuid[])                  to authenticated, service_role;
+revoke execute on function public.claim_next_lead(uuid[], text, text)      from public, anon;
+grant  execute on function public.claim_next_lead(uuid[], text, text)      to authenticated, service_role;
+revoke execute on function public.undo_call(uuid, jsonb)                   from public, anon;
+grant  execute on function public.undo_call(uuid, jsonb)                   to authenticated;
+revoke execute on function public.call_feed(timestamptz)                   from public, anon;
+grant  execute on function public.call_feed(timestamptz)                   to authenticated;
 revoke execute on function public.get_dashboard_stats(text)                from public, anon;
 revoke execute on function public.find_duplicates(text[], text[])          from public, anon;
 

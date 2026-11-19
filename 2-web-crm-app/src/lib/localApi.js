@@ -1,6 +1,6 @@
 // TRYB LOKALNY – działa bez serwera, dane zapisywane w localStorage tej przeglądarki.
 // Ma dokładnie ten sam interfejs co API Supabase w api.js.
-import { normalizePhone, todayISO, noAnswerPatch } from './format';
+import { normalizePhone, todayISO, noAnswerPatch, queueOrder } from './format';
 
 const STORAGE_KEY = 'lead-crm-local-v1';
 const OLD_DEMO_KEY = 'lead-crm-demo-v1';
@@ -113,17 +113,31 @@ export const localApi = {
   async updatePassword() {},
 
   // --- Power Dialer ---
-  async claimNextLead(skipIds = []) {
+  async claimNextLead(skipIds = [], { city, category } = {}) {
+    const cat = category?.trim().toLowerCase();
     return (
       getDb()
         .leads.filter(
           (l) =>
             inQueue(l) &&
             !skipIds.includes(l.id) &&
+            (!city || l.city === city) &&
+            (!cat || (l.category || '').toLowerCase().includes(cat)) &&
             (!l.retry_at || l.retry_at <= new Date().toISOString()),
         )
-        .sort((a, b) => a.created_at.localeCompare(b.created_at))[0] ?? null
+        .sort(queueOrder)[0] ?? null
     );
+  },
+  async undoCall(leadId, prev) {
+    const db = getDb();
+    const lead = db.leads.find((l) => l.id === leadId);
+    const logs = db.logs.filter((g) => g.lead_id === leadId).sort((a, b) => b.created_at.localeCompare(a.created_at));
+    if (!lead || !logs.length) throw new Error('Nie ma czego cofnąć.');
+    db.logs = db.logs.filter((g) => g !== logs[0]);
+    const { status, notes, follow_up_at, retry_at, last_called_at } = prev;
+    Object.assign(lead, { status, notes, follow_up_at, retry_at, last_called_at, call_count: Math.max(0, (lead.call_count || 0) - 1) });
+    save(db);
+    return { ...lead };
   },
   async countQueue() {
     return getDb().leads.filter(inQueue).length;
@@ -164,10 +178,10 @@ export const localApi = {
   },
 
   // --- Baza ---
-  async fetchLeads({ search, status, website, city, sort, page = 0, pageSize = 50 }) {
+  async fetchLeads({ search, status, website, city, deal, sort, page = 0, pageSize = 50 }) {
     const col = sort?.column || 'created_at';
     const all = getDb()
-      .leads.filter((l) => matches(l, { search, status, website, city }))
+      .leads.filter((l) => matches(l, { search, status, website, city }) && (!deal || l.deal_stage === deal))
       .sort(compare(col, !!sort?.asc));
     return { rows: all.slice(page * pageSize, page * pageSize + pageSize), count: all.length };
   },
@@ -201,6 +215,21 @@ export const localApi = {
     db.leads = db.leads.filter((l) => l.id !== id);
     db.logs = db.logs.filter((g) => g.lead_id !== id);
     save(db);
+  },
+  async bulkUpdate(ids, patch) {
+    for (const id of ids) await localApi.updateLead(id, patch);
+  },
+  async bulkDelete(ids) {
+    const db = getDb();
+    const set = new Set(ids);
+    db.leads = db.leads.filter((l) => !set.has(l.id));
+    db.logs = db.logs.filter((g) => !set.has(g.lead_id));
+    save(db);
+  },
+  async fetchCallFeed(sinceISO) {
+    return getDb()
+      .logs.filter((g) => g.created_at >= sinceISO)
+      .map((g) => ({ ...g, email: 'Ten komputer' }));
   },
   async fetchCallLogs(leadId) {
     return getDb()
@@ -248,6 +277,7 @@ export const localApi = {
     const interested = leads.filter((l) => l.status === 'CHCA').length;
     const pct = (a, b) => (b === 0 ? 0 : Math.round((1000 * a) / b) / 10);
     const t = todayISO();
+    const sum = (ls) => ls.reduce((a, l) => a + Number(l.deal_value || 0), 0);
     return {
       calls_today: todayLeads.size,
       interested_today: todayInterested.size,
@@ -261,6 +291,9 @@ export const localApi = {
       followups_due: leads.filter(
         (l) => (l.status === 'DO_ZASTANOWIENIA' || l.status === 'CHCA') && l.follow_up_at && l.follow_up_at <= t,
       ).length,
+      won_count: leads.filter((l) => l.deal_stage === 'WYGRANA').length,
+      won_value: sum(leads.filter((l) => l.deal_stage === 'WYGRANA')),
+      pipeline_value: sum(leads.filter((l) => l.deal_stage === 'SPOTKANIE' || l.deal_stage === 'OFERTA')),
     };
   },
 };

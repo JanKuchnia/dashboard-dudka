@@ -4,7 +4,7 @@ import { Drawer, Spinner } from './ui';
 import { StatusBadge } from './Badges';
 import { useToast } from './Toast';
 import { api } from '../lib/api';
-import { LEAD_STATUS, WEBSITE_STATUS } from '../lib/constants';
+import { LEAD_STATUS, WEBSITE_STATUS, DEAL_STAGE } from '../lib/constants';
 import { formatDateTime, formatDate, telHref, mapsLink } from '../lib/format';
 
 const EMPTY = {
@@ -21,6 +21,8 @@ const EMPTY = {
   status: 'NOWY',
   follow_up_at: '',
   notes: '',
+  deal_stage: '',
+  deal_value: '',
 };
 
 const FIELDS = Object.keys(EMPTY);
@@ -34,6 +36,7 @@ function toPayload(form) {
   }
   if (out.google_rating != null) out.google_rating = Number(String(out.google_rating).replace(',', '.'));
   if (out.google_reviews_count != null) out.google_reviews_count = parseInt(out.google_reviews_count, 10);
+  if (out.deal_value != null) out.deal_value = Number(String(out.deal_value).replace(/\s/g, '').replace(',', '.'));
   return out;
 }
 
@@ -83,6 +86,11 @@ export function LeadDrawer({ open, lead, onClose, onChanged }) {
     const rating = form.google_rating === '' ? null : Number(String(form.google_rating).replace(',', '.'));
     if (rating != null && (Number.isNaN(rating) || rating < 0 || rating > 5)) {
       toast({ type: 'error', title: 'Ocena Google musi być liczbą od 0 do 5' });
+      return;
+    }
+    const value = form.deal_value === '' ? null : Number(String(form.deal_value).replace(/\s/g, '').replace(',', '.'));
+    if (value != null && (Number.isNaN(value) || value < 0)) {
+      toast({ type: 'error', title: 'Wartość umowy musi być liczbą (zł)' });
       return;
     }
     setSaving(true);
@@ -216,6 +224,23 @@ export function LeadDrawer({ open, lead, onClose, onChanged }) {
           <input className="input" type="date" value={form.follow_up_at ?? ''} onChange={set('follow_up_at')} />
         </Field>
         <div />
+        {(form.status === 'CHCA' || form.deal_stage) && (
+          <>
+            <Field label="Etap sprzedaży">
+              <select className="input" value={form.deal_stage} onChange={set('deal_stage')}>
+                <option value="">— jeszcze nic —</option>
+                {Object.entries(DEAL_STAGE).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Wartość umowy (zł)">
+              <input className="input" inputMode="decimal" value={form.deal_value} onChange={set('deal_value')} placeholder="np. 2500" />
+            </Field>
+          </>
+        )}
         <Field label="Notatka" className="col-span-2">
           <textarea className="input resize-y" rows={4} value={form.notes} onChange={set('notes')} />
         </Field>

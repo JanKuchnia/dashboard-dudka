@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { normalizePhone, noAnswerPatch } from './format.js';
+import { normalizePhone, noAnswerPatch, queueOrder, summarizeCalls } from './format.js';
 
 test('normalizePhone daje ten sam klucz dla różnych zapisów numeru', () => {
   assert.equal(normalizePhone('+48 512-345-678'), '512345678');
@@ -45,4 +45,27 @@ test('reguły „nie odebrał” w SQL i w JS się zgadzają', () => {
   assert.equal(noAnswerPatch({ status: 'NOWY' }, 2, null, now).status, 'NIE_ODEBRAL');
   assert.equal(noAnswerPatch({ status: 'NOWY' }, 1, null, now).status, 'NOWY');
   assert.equal((sql.match(/interval '14 days'/g) || []).length, 2); // kolejka + licznik
+});
+
+test('queueOrder: bez strony i z dużą liczbą opinii najpierw, potem najstarsze', () => {
+  const leads = [
+    { id: 'www', website_status: 'MA_WWW', google_reviews_count: 500, created_at: '2026-01-01' },
+    { id: 'old', website_status: 'BRAK_WWW', google_reviews_count: 10, created_at: '2026-01-01' },
+    { id: 'busy', website_status: 'TYLKO_FB', google_reviews_count: 200, created_at: '2026-02-01' },
+    { id: 'new', website_status: 'BRAK_WWW', google_reviews_count: 10, created_at: '2026-03-01' },
+  ];
+  assert.deepEqual(leads.sort(queueOrder).map((l) => l.id), ['busy', 'old', 'new', 'www']);
+  const sql = readFileSync(new URL('../../../1-database-supabase/schema.sql', import.meta.url), 'utf8');
+  assert.ok(sql.includes(`order by (l.website_status <> 'MA_WWW') desc,`));
+});
+
+test('summarizeCalls liczy rozmowy, odebrane i „Chcą” po osobie, dniu i godzinie', () => {
+  const s = summarizeCalls([
+    { created_at: new Date(2026, 10, 18, 9, 5).toISOString(), outcome: 'CHCA', email: 'a@x.pl' },
+    { created_at: new Date(2026, 10, 18, 9, 40).toISOString(), outcome: 'NIE_ODEBRAL', email: 'a@x.pl' },
+    { created_at: new Date(2026, 10, 19, 14, 0).toISOString(), outcome: 'NIE_CHCA', email: 'b@x.pl' },
+  ]);
+  assert.deepEqual(s.byUser[0], { key: 'a@x.pl', calls: 2, answered: 1, won: 1 });
+  assert.deepEqual(s.byDay.map((d) => [d.key, d.calls]), [['2026-11-18', 2], ['2026-11-19', 1]]);
+  assert.deepEqual(s.byHour.map((h) => [h.key, h.answered]), [[9, 1], [14, 1]]);
 });

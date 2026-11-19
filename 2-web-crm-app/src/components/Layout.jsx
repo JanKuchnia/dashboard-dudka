@@ -1,4 +1,4 @@
-import { PhoneCall, CalendarClock, LayoutDashboard, LogOut, HardDrive, Radar } from 'lucide-react';
+import { PhoneCall, CalendarClock, LayoutDashboard, LogOut, HardDrive, Radar, BarChart3 } from 'lucide-react';
 import { APP_NAME } from '../lib/constants';
 import { classNames } from '../lib/format';
 
@@ -6,6 +6,7 @@ export const NAV = [
   { id: 'dialer', label: 'Tryb dzwonienia', short: 'Dzwonienie', icon: PhoneCall },
   { id: 'followups', label: 'Follow-upy', short: 'Follow-upy', icon: CalendarClock },
   { id: 'baza', label: 'Baza i statystyki', short: 'Baza', icon: LayoutDashboard },
+  { id: 'stats', label: 'Statystyki', short: 'Statystyki', icon: BarChart3 },
   { id: 'finder', label: 'Pozyskaj firmy', short: 'Pozyskaj', icon: Radar },
 ];
 
@@ -117,7 +118,7 @@ export function Layout({ view, onNavigate, stats, user, local, onSignOut, childr
       <main key={view} className="mx-auto w-full max-w-7xl animate-view-in px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-10">{children}</main>
 
       {/* Dolny pasek nawigacji – telefon */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-zinc-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-zinc-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
         {NAV.map((item) => {
           const Icon = item.icon;
           const active = view === item.id;

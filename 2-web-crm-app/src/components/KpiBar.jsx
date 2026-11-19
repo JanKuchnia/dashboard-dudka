@@ -1,5 +1,5 @@
-import { PhoneCall, ThumbsUp, Percent, Inbox, CalendarClock } from 'lucide-react';
-import { classNames } from '../lib/format';
+import { PhoneCall, ThumbsUp, Percent, Inbox, CalendarClock, Trophy } from 'lucide-react';
+import { classNames, formatPLN } from '../lib/format';
 
 function Kpi({ icon: Icon, label, value, sub, accent }) {
   return (
@@ -28,7 +28,7 @@ export function KpiBar({ stats }) {
   const s = stats ?? {};
   const v = (x) => (stats ? x ?? 0 : '–');
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
       <Kpi
         icon={PhoneCall}
         label="Obdzwonione dzisiaj"
@@ -63,6 +63,13 @@ export function KpiBar({ stats }) {
         value={v(s.followups_due)}
         sub={stats ? `Wszystkie: ${s.thinking_total ?? 0}` : ''}
         accent="bg-amber-50 text-amber-600"
+      />
+      <Kpi
+        icon={Trophy}
+        label="Sprzedaż (wygrane)"
+        value={stats ? formatPLN(s.won_value) : '–'}
+        sub={stats ? `${s.won_count ?? 0} umów · w toku ${formatPLN(s.pipeline_value)}` : ''}
+        accent="bg-emerald-50 text-emerald-700"
       />
     </div>
   );

@@ -58,9 +58,19 @@ const supabaseApi = {
   },
 
   // --- Power Dialer ---
-  async claimNextLead(skipIds = []) {
-    const rows = unwrap(await supabase.rpc('claim_next_lead', { p_skip: skipIds }));
+  async claimNextLead(skipIds = [], { city, category } = {}) {
+    const rows = unwrap(
+      await supabase.rpc('claim_next_lead', {
+        p_skip: skipIds,
+        p_city: city || null,
+        p_category: category?.trim() || null,
+      }),
+    );
     return rows?.[0] ?? null;
+  },
+  /** Cofa ostatni zapis; prev = lead sprzed rozmowy */
+  async undoCall(leadId, prev) {
+    return unwrap(await supabase.rpc('undo_call', { p_lead_id: leadId, p_prev: prev }));
   },
   async countQueue() {
     const { count, error } = await supabase
@@ -94,9 +104,10 @@ const supabaseApi = {
   },
 
   // --- Baza ---
-  async fetchLeads({ search, status, website, city, sort, page = 0, pageSize = 50 }) {
+  async fetchLeads({ search, status, website, city, deal, sort, page = 0, pageSize = 50 }) {
     let q = supabase.from('leads').select('*', { count: 'exact' });
     if (status) q = q.eq('status', status);
+    if (deal) q = q.eq('deal_stage', deal);
     if (website) q = q.eq('website_status', website);
     if (city) q = q.eq('city', city);
     const s = sanitizeSearch(search || '');
@@ -142,6 +153,12 @@ const supabaseApi = {
   },
   async deleteLead(id) {
     unwrap(await supabase.from('leads').delete().eq('id', id));
+  },
+  async bulkUpdate(ids, patch) {
+    unwrap(await supabase.from('leads').update(patch).in('id', ids));
+  },
+  async bulkDelete(ids) {
+    unwrap(await supabase.from('leads').delete().in('id', ids));
   },
   async fetchCallLogs(leadId) {
     return unwrap(
@@ -195,6 +212,10 @@ const supabaseApi = {
   // --- Statystyki ---
   async getStats() {
     return unwrap(await supabase.rpc('get_dashboard_stats'));
+  },
+  /** Rozmowy od podanej chwili z e-mailem osoby dzwoniącej */
+  async fetchCallFeed(sinceISO) {
+    return unwrap(await supabase.rpc('call_feed', { p_since: sinceISO }));
   },
 };
 
