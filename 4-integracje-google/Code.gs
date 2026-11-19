@@ -81,14 +81,20 @@ function synchronizujKontakty() {
     leads.forEach(function (lead) {
       try {
         const contact = People.People.createContact(buildContact_(lead, groupResource));
-        supabase_('leads?id=eq.' + encodeURIComponent(lead.id), {
-          method: 'patch',
-          body: {
-            google_contact_id: contact.resourceName,
-            google_contact_synced_at: new Date().toISOString(),
-          },
-          prefer: 'return=minimal',
-        });
+        try {
+          supabase_('leads?id=eq.' + encodeURIComponent(lead.id), {
+            method: 'patch',
+            body: {
+              google_contact_id: contact.resourceName,
+              google_contact_synced_at: new Date().toISOString(),
+            },
+            prefer: 'return=minimal',
+          });
+        } catch (e) {
+          // Lead nie został oznaczony – usuwamy kontakt, inaczej następna synchronizacja doda go drugi raz
+          People.People.deleteContact(contact.resourceName);
+          throw e;
+        }
         ok++;
       } catch (e) {
         console.error('Nie udało się dodać kontaktu „' + lead.company_name + '”: ' + e.message);

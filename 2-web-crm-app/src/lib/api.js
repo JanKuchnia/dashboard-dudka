@@ -2,6 +2,7 @@
 // Z prawdziwymi kluczami w .env rozmawia z Supabase, bez nich działa lokalnie (dane w przeglądarce).
 import { supabase, isLocal } from './supabase';
 import { localApi } from './localApi';
+import { normalizePhone } from './format';
 
 /** Tłumaczy błędy Supabase na zrozumiałe komunikaty po polsku */
 export function translateError(error) {
@@ -119,8 +120,9 @@ const supabaseApi = {
     return all;
   },
   async fetchCities() {
-    const rows = unwrap(await supabase.from('leads').select('city').not('city', 'is', null).limit(10000));
-    return [...new Set(rows.map((r) => r.city).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pl'));
+    // Widok z unikalnymi miastami – czytanie wszystkich leadów ucinał limit 1000 wierszy Supabase
+    const rows = unwrap(await supabase.from('v_cities').select('city'));
+    return rows.map((r) => r.city).sort((a, b) => a.localeCompare(b, 'pl'));
   },
   async createLead(lead) {
     return unwrap(await supabase.from('leads').insert({ ...lead, source: 'manual' }).select().single());
@@ -143,18 +145,29 @@ const supabaseApi = {
   },
 
   // --- Import (Pozyskaj firmy) ---
-  async getExistingKeys() {
-    const rows = unwrap(await supabase.from('leads').select('maps_place_id,phone_normalized').limit(100000));
+  /** Które z podanych firm już są w bazie – pytamy tylko o nie (RPC), nie pobieramy całej bazy */
+  async getExistingKeys(items = []) {
+    const rows = unwrap(
+      await supabase.rpc('find_duplicates', {
+        p_place_ids: items.map((i) => i.maps_place_id).filter(Boolean),
+        p_phones: items.map((i) => i.phone).filter(Boolean),
+      }),
+    );
     return {
       placeIds: new Set(rows.map((r) => r.maps_place_id).filter(Boolean)),
       phones: new Set(rows.map((r) => r.phone_normalized).filter(Boolean)),
     };
   },
   async importLeads(items, source = 'import') {
-    const { phones } = await supabaseApi.getExistingKeys();
+    const { placeIds, phones } = await supabaseApi.getExistingKeys(items);
+    // Pomijamy firmy z bazy i powtórki w tej samej paczce (te same zasady co tryb lokalny)
     const fresh = items.filter((i) => {
-      const p = String(i.phone || '').replace(/\D/g, '').slice(-9);
-      return !p || !phones.has(p);
+      const p = normalizePhone(i.phone);
+      if (i.maps_place_id && placeIds.has(i.maps_place_id)) return false;
+      if (p && phones.has(p)) return false;
+      if (i.maps_place_id) placeIds.add(i.maps_place_id);
+      if (p) phones.add(p);
+      return true;
     });
     if (!fresh.length) return { inserted: [], skipped: items.length };
     const inserted = unwrap(
