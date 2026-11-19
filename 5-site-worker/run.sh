@@ -12,10 +12,13 @@ token() {
   if [ -f "$f" ] && [ "$(jq -r '.expires_at // 0' "$f")" -gt $((now + 120)) ]; then
     jq -r .access_token "$f"; return
   fi
-  curl -sf "$SUPABASE_URL/auth/v1/token?grant_type=password" -H "apikey: $SUPABASE_ANON_KEY" \
+  local r code
+  r=$(curl -s -w '\n%{http_code}' "$SUPABASE_URL/auth/v1/token?grant_type=password" -H "apikey: $SUPABASE_ANON_KEY" \
     -H 'Content-Type: application/json' \
-    -d "$(jq -n --arg e "$SUPABASE_EMAIL" --arg p "$SUPABASE_PASSWORD" '{email:$e,password:$p}')" \
-    | jq '{access_token, expires_at}' > "$f.tmp" && mv "$f.tmp" "$f" && jq -r .access_token "$f"
+    -d "$(jq -n --arg e "$SUPABASE_EMAIL" --arg p "$SUPABASE_PASSWORD" '{email:$e,password:$p}')") || { echo "curl: brak połączenia z $SUPABASE_URL" >&2; return 1; }
+  code=${r##*$'\n'}
+  if [ "$code" != 200 ]; then echo "logowanie: HTTP $code: $(sed '$d' <<<"$r" | jq -r '.msg // .error_description // .message // .' 2>/dev/null)" >&2; return 1; fi
+  sed '$d' <<<"$r" | jq '{access_token, expires_at}' > "$f.tmp" && mv "$f.tmp" "$f" && jq -r .access_token "$f"
 }
 rpc() { # rpc <name> <json body>
   curl -sf "$SUPABASE_URL/rest/v1/rpc/$1" -H "apikey: $SUPABASE_ANON_KEY" \
