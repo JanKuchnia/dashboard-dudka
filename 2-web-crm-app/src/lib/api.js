@@ -66,7 +66,7 @@ const supabaseApi = {
     const { count, error } = await supabase
       .from('leads')
       .select('id', { count: 'exact', head: true })
-      .eq('status', 'NOWY');
+      .or(`status.eq.NOWY,and(status.eq.NIE_ODEBRAL,last_called_at.lte.${new Date(Date.now() - 14 * 864e5).toISOString()})`);
     if (error) throw new Error(translateError(error));
     return count ?? 0;
   },

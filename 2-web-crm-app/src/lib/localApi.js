@@ -7,6 +7,8 @@ const OLD_DEMO_KEY = 'lead-crm-demo-v1';
 export const CHANGE_EVENT = 'lead-crm-changed';
 // „Nie odbiera” wraca do kolejki po tylu dniach (to samo w claim_next_lead w SQL)
 const daysAgoISO = (d) => new Date(Date.now() - d * 864e5).toISOString();
+const inQueue = (l) =>
+  l.status === 'NOWY' || (l.status === 'NIE_ODEBRAL' && l.last_called_at <= daysAgoISO(14));
 
 const uuid = () =>
   globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -116,7 +118,7 @@ export const localApi = {
       getDb()
         .leads.filter(
           (l) =>
-            (l.status === 'NOWY' || (l.status === 'NIE_ODEBRAL' && l.last_called_at <= daysAgoISO(14))) &&
+            inQueue(l) &&
             !skipIds.includes(l.id) &&
             (!l.retry_at || l.retry_at <= new Date().toISOString()),
         )
@@ -124,7 +126,7 @@ export const localApi = {
     );
   },
   async countQueue() {
-    return getDb().leads.filter((l) => l.status === 'NOWY').length;
+    return getDb().leads.filter(inQueue).length;
   },
   async logCall(leadId, outcome, notes, followUpAt) {
     const db = getDb();
@@ -253,7 +255,7 @@ export const localApi = {
       interested_total: interested,
       thinking_total: leads.filter((l) => l.status === 'DO_ZASTANOWIENIA').length,
       rejected_total: leads.filter((l) => l.status === 'NIE_CHCA').length,
-      queue_new: leads.filter((l) => l.status === 'NOWY').length,
+      queue_new: leads.filter(inQueue).length,
       called_total: called.length,
       success_rate: pct(interested, called.length),
       followups_due: leads.filter(

@@ -341,7 +341,9 @@ as $$
     'interested_total',  (select count(*) from public.leads where status = 'CHCA'),
     'thinking_total',    (select count(*) from public.leads where status = 'DO_ZASTANOWIENIA'),
     'rejected_total',    (select count(*) from public.leads where status = 'NIE_CHCA'),
-    'queue_new',         (select count(*) from public.leads where status = 'NOWY'),
+    'queue_new',         (select count(*) from public.leads
+                           where status = 'NOWY'
+                              or (status = 'NIE_ODEBRAL' and last_called_at <= now() - interval '14 days')),
     'called_total',      (select count(*) from called),
     -- skuteczność łączna w % (Chcą / wszystkie obdzwonione)
     'success_rate',      (select case when count(*) = 0 then 0
