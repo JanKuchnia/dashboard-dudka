@@ -1,0 +1,5 @@
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/site-worker/env
+ExecStart=%h/dashboard-dudka/5-site-worker/run.sh
+TimeoutStartSec=90min

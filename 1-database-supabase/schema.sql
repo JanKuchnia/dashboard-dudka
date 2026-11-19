@@ -615,6 +615,107 @@ exception when duplicate_object then null;
 end $$;
 
 -- =====================================================================
+--  GENERATOR STRON (homelab worker, patrz docs/superpowers/specs)
+--  Worker loguje się własnym kontem (nie w team_members) i może wywołać
+--  tylko dwie funkcje poniżej. Dodanie konta:
+--    insert into public.site_workers (email) values ('worker@twoja-domena.pl');
+-- =====================================================================
+alter table public.leads add column if not exists site_status text
+  check (site_status in ('ZLECONA', 'W_TOKU', 'GOTOWA', 'BLAD'));
+alter table public.leads add column if not exists site_brief text;
+alter table public.leads add column if not exists site_requested_at timestamptz;
+alter table public.leads add column if not exists site_repo_url text;
+alter table public.leads add column if not exists site_preview_url text;
+alter table public.leads add column if not exists site_error text;
+
+create table if not exists public.site_workers (
+  email      text primary key check (email = lower(email)),
+  created_at timestamptz not null default now()
+);
+alter table public.site_workers enable row level security;
+revoke all on public.site_workers from anon, authenticated;
+
+create or replace function public.is_site_worker()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.site_workers
+     where email = lower(auth.jwt() ->> 'email')
+  );
+$$;
+revoke execute on function public.is_site_worker() from public, anon;
+grant  execute on function public.is_site_worker() to authenticated;
+
+-- Zawieszone zlecenia (W_TOKU) -> BLAD; potem bierze najstarsze ZLECONA.
+-- Zakłada jednego workera (patrz spec: Failures).
+create or replace function public.claim_site_job()
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  job public.leads;
+begin
+  if not public.is_site_worker() then
+    raise exception 'Brak uprawnień';
+  end if;
+
+  update public.leads
+     set site_status = 'BLAD', site_error = 'run przerwany'
+   where site_status = 'W_TOKU';
+
+  select * into job from public.leads
+   where site_status = 'ZLECONA'
+   order by site_requested_at nulls last
+   limit 1
+   for update skip locked;
+  if not found then
+    return null;
+  end if;
+
+  update public.leads set site_status = 'W_TOKU', site_error = null where id = job.id;
+  return to_jsonb(job);
+end;
+$$;
+revoke execute on function public.claim_site_job() from public, anon;
+grant  execute on function public.claim_site_job() to authenticated;
+
+create or replace function public.finish_site_job(
+  p_lead_id uuid, p_status text, p_repo_url text, p_preview_url text, p_error text
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_site_worker() then
+    raise exception 'Brak uprawnień';
+  end if;
+  if p_status not in ('GOTOWA', 'BLAD') then
+    raise exception 'Zły status';
+  end if;
+
+  update public.leads
+     set site_status      = p_status,
+         site_repo_url    = p_repo_url,
+         site_preview_url = p_preview_url,
+         site_error       = left(p_error, 500)
+   where id = p_lead_id and site_status = 'W_TOKU';
+  if not found then
+    raise exception 'Lead nie jest w trakcie generowania';
+  end if;
+end;
+$$;
+revoke execute on function public.finish_site_job(uuid, text, text, text, text) from public, anon;
+grant  execute on function public.finish_site_job(uuid, text, text, text, text) to authenticated;
+
+-- =====================================================================
 --  KONIEC. Po uruchomieniu powinien pojawić się komunikat
 --  „Success. No rows returned”.
 -- =====================================================================

@@ -1,0 +1,1 @@
+{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "Read output_components in this Stitch result before checking screens. If Stitch asked a question or offered suggestions, answer it now, following the rules in the prompt."}}

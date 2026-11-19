@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "deny": ["Read(~/.config/gh/**)", "Read(~/.config/site-worker/**)"]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "filesystem": { "denyRead": ["~/.config/gh", "~/.config/site-worker"] }
+  },
+  "hooks": {
+    "PostToolUse": [{
+      "matcher": "mcp__stitch__generate_screen_from_text|mcp__stitch__edit_screens|mcp__stitch__generate_variants",
+      "hooks": [{ "type": "command", "command": "cat ~/dashboard-dudka/5-site-worker/stitch-reminder.json" }]
+    }]
+  }
+}

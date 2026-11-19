@@ -60,6 +60,7 @@ export function LeadDrawer({ open, lead, onClose, onChanged }) {
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [logs, setLogs] = useState(null);
+  const [brief, setBrief] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -67,6 +68,7 @@ export function LeadDrawer({ open, lead, onClose, onChanged }) {
     if (lead) for (const k of FIELDS) initial[k] = lead[k] ?? '';
     setForm(initial);
     setConfirmDelete(false);
+    setBrief('');
     setLogs(null);
     if (lead?.id) {
       api
@@ -102,6 +104,24 @@ export function LeadDrawer({ open, lead, onClose, onChanged }) {
       onClose();
     } catch (e) {
       toast({ type: 'error', title: 'Nie udało się zapisać', description: e.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const requestSite = async () => {
+    setSaving(true);
+    try {
+      await api.updateLead(lead.id, {
+        site_status: 'ZLECONA',
+        site_brief: brief.trim() || null,
+        site_requested_at: new Date().toISOString(),
+      });
+      toast({ type: 'success', title: 'Zlecono stronę', description: 'Demo pojawi się tu, gdy będzie gotowe' });
+      onChanged?.();
+      onClose();
+    } catch (e) {
+      toast({ type: 'error', title: 'Nie udało się zlecić', description: e.message });
     } finally {
       setSaving(false);
     }
@@ -245,6 +265,41 @@ export function LeadDrawer({ open, lead, onClose, onChanged }) {
           <textarea className="input resize-y" rows={4} value={form.notes} onChange={set('notes')} />
         </Field>
       </div>
+
+      {!isNew && (lead.deal_stage === 'OFERTA' || lead.deal_stage === 'WYGRANA') && lead.site_status !== 'GOTOWA' && (
+        <div className="mt-8">
+          <h3 className="mb-3 text-sm font-semibold text-zinc-900">Demo strony</h3>
+          {lead.site_status === 'ZLECONA' || lead.site_status === 'W_TOKU' ? (
+            <p className="text-sm text-zinc-500">
+              {lead.site_status === 'ZLECONA' ? 'Czeka w kolejce na generator…' : 'Generator buduje stronę…'}
+            </p>
+          ) : (
+            <>
+              {lead.site_status === 'BLAD' && (
+                <p className="mb-2 text-sm text-red-600">Poprzednia próba nie wyszła: {lead.site_error || 'nieznany błąd'}</p>
+              )}
+              <textarea
+                className="input resize-y"
+                rows={2}
+                value={brief}
+                onChange={(e) => setBrief(e.target.value)}
+                placeholder="Co klient chce (opcjonalnie): podstrony, kolory, link do logo"
+              />
+              <button type="button" className="btn-primary mt-2" disabled={saving} onClick={requestSite}>
+                Zrób stronę
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      {!isNew && lead.site_status === 'GOTOWA' && (
+        <div className="mt-8 text-sm">
+          <h3 className="mb-3 font-semibold text-zinc-900">Demo strony</h3>
+          <a className="text-blue-600 underline" href={lead.site_preview_url} target="_blank" rel="noreferrer">Demo</a>
+          {' · '}
+          <a className="text-blue-600 underline" href={lead.site_repo_url} target="_blank" rel="noreferrer">Repo</a>
+        </div>
+      )}
 
       {!isNew && (
         <div className="mt-8">
