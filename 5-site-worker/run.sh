@@ -44,6 +44,7 @@ $JOB" \
   --mcp-config "$CFG/stitch.json" --strict-mcp-config \
   --allowedTools "Read Write Edit Bash WebSearch WebFetch Skill Agent mcp__stitch__*" \
   --permission-mode dontAsk \
+  --model sonnet --max-budget-usd 4 \
   --output-format json --json-schema "$(cat "$W/result.schema.json")" \
   > run.json 2> run.err
 RESULT=$(jq -c '.structured_output // (.result | fromjson? ) // {}' run.json 2>/dev/null || echo '{}')
