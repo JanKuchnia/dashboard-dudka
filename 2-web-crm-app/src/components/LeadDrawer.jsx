@@ -113,6 +113,7 @@ export function LeadDrawer({ open, lead, onClose, onChanged }) {
     setSaving(true);
     try {
       await api.updateLead(lead.id, {
+        deal_stage: form.deal_stage,
         site_status: 'ZLECONA',
         site_brief: brief.trim() || null,
         site_requested_at: new Date().toISOString(),
@@ -266,7 +267,7 @@ export function LeadDrawer({ open, lead, onClose, onChanged }) {
         </Field>
       </div>
 
-      {!isNew && (lead.deal_stage === 'OFERTA' || lead.deal_stage === 'WYGRANA') && lead.site_status !== 'GOTOWA' && (
+      {!isNew && (form.deal_stage === 'OFERTA' || form.deal_stage === 'WYGRANA') && lead.site_status !== 'GOTOWA' && (
         <div className="mt-8">
           <h3 className="mb-3 text-sm font-semibold text-zinc-900">Demo strony</h3>
           {lead.site_status === 'ZLECONA' || lead.site_status === 'W_TOKU' ? (
