@@ -90,7 +90,8 @@ export function PowerDialer({ stats, onDataChanged, onNavigate, dataVersion }) {
           <Keyboard className="size-3.5" />
           <Kbd>1</Kbd>
           <Kbd>2</Kbd>
-          <Kbd>3</Kbd> wynik
+          <Kbd>3</Kbd>
+          <Kbd>4</Kbd> wynik
           <span className="mx-1">·</span>
           <Kbd>Ctrl+Enter</Kbd> zapisz
           <span className="mx-1">·</span>
@@ -121,7 +122,7 @@ export function PowerDialer({ stats, onDataChanged, onNavigate, dataVersion }) {
         <div className="card">
           <EmptyState
             icon={PartyPopper}
-            title={skippedCount > 0 ? 'Koniec kolejki' : 'Kolejka jest pusta 🎉'}
+            title={skippedCount > 0 ? 'Koniec kolejki' : 'Kolejka jest pusta'}
             description={
               skippedCount > 0
                 ? `Zostały tylko pominięte firmy (${skippedCount}). Możesz do nich wrócić.`

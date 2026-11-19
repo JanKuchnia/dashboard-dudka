@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "ai-color-palette",
+        "value": "*",
+        "files": [
+          "src/views/Login.jsx"
+        ],
+        "createdAt": "2026-11-19T12:06:49.606Z",
+        "reason": "Claude triage: indigo-violet gradient is the app's existing brand mark, already in Layout.jsx logo, the original Login.jsx and the extension logo before this change"
+      }
+    ]
+  }
+}

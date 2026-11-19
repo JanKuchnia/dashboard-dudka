@@ -324,3 +324,15 @@
 .crmx-msg-info    { background: #eef2ff; color: #3730a3; }
 .crmx-msg-success { background: #ecfdf5; color: #047857; }
 .crmx-msg-error   { background: #fff1f2; color: #be123c; }
+
+/* Ikony Lucide w panelu */
+.crmx-svg {
+  width: 1em;
+  height: 1em;
+  flex: none;
+  vertical-align: -0.125em;
+  margin-right: 0.3em;
+}
+.crmx-logo .crmx-svg {
+  margin: 0;
+}

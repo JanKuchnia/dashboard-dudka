@@ -34,6 +34,7 @@ function useHashView() {
 
 export default function App() {
   const [session, setSession] = useState(undefined); // undefined = sprawdzanie sesji
+  const [recovery, setRecovery] = useState(false); // wejście z linku „ustaw nowe hasło”
   const [stats, setStats] = useState(null);
   const [dataVersion, setDataVersion] = useState(0);
   const [view, navigate] = useHashView();
@@ -45,7 +46,10 @@ export default function App() {
       .getSession()
       .then((s) => mounted && setSession(s ?? null))
       .catch(() => mounted && setSession(null));
-    const unsubscribe = api.onAuthChange((s) => setSession(s ?? null));
+    const unsubscribe = api.onAuthChange((s, event) => {
+      setSession(s ?? null);
+      if (event === 'PASSWORD_RECOVERY') setRecovery(true);
+    });
     return () => {
       mounted = false;
       unsubscribe();
@@ -93,6 +97,7 @@ export default function App() {
   }, [view]);
 
   if (session === undefined) return <FullScreenLoader />;
+  if (recovery) return <Login initialMode="new-password" onPasswordSet={() => setRecovery(false)} />;
   if (!session) return <Login />;
 
   return (

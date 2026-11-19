@@ -278,15 +278,16 @@ export function Finder({ onDataChanged, onNavigate }) {
               </div>
             ) : (
               <ul className="card divide-y divide-zinc-100 overflow-hidden">
-                {visible.map((r) => {
+                {visible.map((r, i) => {
                   const dup = isDup(r);
                   const checked = selected.has(r.key);
                   return (
                     <li
                       key={r.key}
                       onClick={() => !dup && toggle(r.key)}
+                      style={{ '--i': i }}
                       className={classNames(
-                        'flex items-start gap-3 px-4 py-3.5 transition sm:items-center',
+                        'stagger-in flex items-start gap-3 px-4 py-3.5 transition sm:items-center',
                         dup ? 'bg-zinc-50/80' : 'cursor-pointer hover:bg-zinc-50',
                         checked && 'bg-indigo-50/60 hover:bg-indigo-50',
                       )}

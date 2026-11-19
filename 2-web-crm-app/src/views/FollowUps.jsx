@@ -141,11 +141,12 @@ export function FollowUps({ onDataChanged, dataVersion }) {
                   {group.hint && <span className="hidden text-xs text-zinc-400 sm:inline">· {group.hint}</span>}
                 </div>
                 <ul className="space-y-2.5">
-                  {items.map((lead) => (
+                  {items.map((lead, i) => (
                     <li
                       key={lead.id}
+                      style={{ '--i': i }}
                       className={classNames(
-                        'flex animate-fade-in items-stretch gap-4 rounded-2xl border bg-white p-3.5 shadow-xs transition hover:shadow-md sm:p-4',
+                        'stagger-in flex items-stretch gap-4 rounded-2xl border bg-white p-3.5 shadow-xs transition hover:shadow-md sm:p-4',
                         group.row,
                       )}
                     >

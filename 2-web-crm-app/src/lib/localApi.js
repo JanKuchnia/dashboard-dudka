@@ -1,6 +1,6 @@
 // TRYB LOKALNY – działa bez serwera, dane zapisywane w localStorage tej przeglądarki.
 // Ma dokładnie ten sam interfejs co API Supabase w api.js.
-import { normalizePhone, todayISO } from './format';
+import { normalizePhone, todayISO, noAnswerPatch } from './format';
 
 const STORAGE_KEY = 'lead-crm-local-v1';
 const OLD_DEMO_KEY = 'lead-crm-demo-v1';
@@ -105,12 +105,16 @@ export const localApi = {
     return { user: { email: 'Ten komputer' } };
   },
   async signOut() {},
+  async resetPassword() {},
+  async updatePassword() {},
 
   // --- Power Dialer ---
   async claimNextLead(skipIds = []) {
     return (
       getDb()
-        .leads.filter((l) => l.status === 'NOWY' && !skipIds.includes(l.id))
+        .leads.filter(
+          (l) => l.status === 'NOWY' && !skipIds.includes(l.id) && (!l.retry_at || l.retry_at <= new Date().toISOString()),
+        )
         .sort((a, b) => a.created_at.localeCompare(b.created_at))[0] ?? null
     );
   },
@@ -122,10 +126,13 @@ export const localApi = {
     const lead = db.leads.find((l) => l.id === leadId);
     if (!lead) throw new Error('Nie znaleziono firmy – mogła zostać usunięta.');
     const ts = new Date().toISOString();
+    const misses = db.logs.filter((g) => g.lead_id === leadId && g.outcome === 'NIE_ODEBRAL').length;
     Object.assign(lead, {
       status: outcome,
       notes: notes?.trim() || null,
       follow_up_at: followUpAt || null,
+      retry_at: null,
+      ...(outcome === 'NIE_ODEBRAL' ? noAnswerPatch(lead, misses, followUpAt) : {}),
       last_called_at: ts,
       call_count: (lead.call_count || 0) + 1,
       updated_at: ts,
@@ -136,7 +143,7 @@ export const localApi = {
       created_at: ts,
       outcome,
       notes: notes?.trim() || null,
-      follow_up_at: followUpAt || null,
+      follow_up_at: lead.follow_up_at,
     });
     save(db);
     return { ...lead };
@@ -228,15 +235,16 @@ export const localApi = {
     const start = startOfTodayMs();
     const today = logs.filter((g) => new Date(g.created_at).getTime() >= start);
     const todayLeads = new Set(today.map((g) => g.lead_id));
+    const todayAnswered = new Set(today.filter((g) => g.outcome !== 'NIE_ODEBRAL').map((g) => g.lead_id));
     const todayInterested = new Set(today.filter((g) => g.outcome === 'CHCA').map((g) => g.lead_id));
-    const called = leads.filter((l) => l.status !== 'NOWY');
+    const called = leads.filter((l) => l.status !== 'NOWY' && l.status !== 'NIE_ODEBRAL');
     const interested = leads.filter((l) => l.status === 'CHCA').length;
     const pct = (a, b) => (b === 0 ? 0 : Math.round((1000 * a) / b) / 10);
     const t = todayISO();
     return {
       calls_today: todayLeads.size,
       interested_today: todayInterested.size,
-      success_rate_today: pct(todayInterested.size, todayLeads.size),
+      success_rate_today: pct(todayInterested.size, todayAnswered.size),
       interested_total: interested,
       thinking_total: leads.filter((l) => l.status === 'DO_ZASTANOWIENIA').length,
       rejected_total: leads.filter((l) => l.status === 'NIE_CHCA').length,
