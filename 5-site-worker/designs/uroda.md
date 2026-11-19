@@ -8,8 +8,8 @@ colors:
   muted: "#7D6A60"
   accent: "#C9A27A"
 typography:
-  h1: { fontFamily: "Cormorant Garamond", fontSize: 4rem, fontWeight: 600 }
-  h2: { fontFamily: "Cormorant Garamond", fontSize: 2.5rem, fontWeight: 600 }
+  h1: { fontFamily: "Instrument Serif", fontSize: 4.5rem, fontWeight: 400 }
+  h2: { fontFamily: "Instrument Serif", fontSize: 2.75rem, fontWeight: 400 }
   body-md: { fontFamily: "Manrope", fontSize: 1.0625rem }
 rounded: { sm: 2px, md: 6px }
 spacing: { sourceScale: "4/8/16/24/40/64/96" }

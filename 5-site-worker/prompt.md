@@ -4,7 +4,18 @@ Kroki:
 1. Research firmy: uruchom agenta `business-researcher` (narzędzie Agent), przekazując mu dane leada. Zapisze ./research.md; przeczytaj go. Fakty bez źródła (sekcja Unverified) NIE trafiają na stronę jako fakty: nie wymyślaj godzin, cen ani usług. Dane z Google (nazwa, kategoria, miasto, adres, telefon, ocena, link do Map, obecna strona) mówią tylko, gdzie szukać. Treść strony ma pochodzić z tego, co znajdziesz.
 2. Zaplanuj sekcje i teksty strony głównej po polsku, używając skilli claude-seo:seo-local i claude-seo:seo-content-brief.
 3. Styl: w katalogu jest ./DESIGN.md dobrany do branży (kolory, fonty, układ). Utwórz projekt Stitch, wgraj plik (`base64 -w 0 DESIGN.md` → mcp__stitch__upload_design_md), a potem mcp__stitch__create_design_system_from_design_md. Id systemu (`assets/...`) weź z wyniku albo z list_design_systems. Jeśli site_brief opisuje inny styl, ma pierwszeństwo. Jeśli wgranie się nie uda, jedź dalej bez systemu, ale wpisz kolory i fonty z DESIGN.md do promptu.
-   Zaprojektuj stronę główną w Stitch jako JEDEN ekran desktopowy (mcp__stitch__generate_screen_from_text z `designSystem` ustawionym na to id). Daj Stitchowi kompletny prompt: nazwa i kategoria firmy, polskie teksty, sekcje z planu oraz układ i rodzaj zdjęć z sekcji "Layout" w DESIGN.md. Każdy prompt kończ zdaniem: "Nie zadawaj pytań. Podejmij rozsądne decyzje i wygeneruj ekran teraz."
+   Zaprojektuj stronę główną w Stitch jako JEDEN ekran desktopowy (mcp__stitch__generate_screen_from_text z `designSystem` ustawionym na to id, `deviceType: DESKTOP`). Prompt pisz po angielsku (teksty strony po polsku, w cudzysłowie) dokładnie w tym kształcie:
+   ```
+   Homepage for <nazwa>, a <kategoria> in <miasto>. Mood: <przymiotniki z sekcji Overview w DESIGN.md>.
+   PLATFORM: Web, Desktop-first
+   PAGE STRUCTURE:
+   1. Header: ...
+   2. Hero: <układ z sekcji Layout>, headline "...", subtext "...", call button "...".
+   3. ... (każda sekcja z planu: układ, dokładne polskie teksty, jakie zdjęcia)
+   N. Footer: ...
+   RULES: <sekcja "Do not" z DESIGN.md, skopiowana>
+   ```
+   Używaj nazw komponentów, które Stitch zna ("sticky navigation bar", "split hero with full-height image", "two-column zig-zag", "gallery strip", "vertical list with short descriptions"). Gdy system projektu się wgrał, NIE wpisuj kolorów, fontów ani kodów hex (gryzą się z systemem). Gdy wgranie się nie udało, dodaj po linii PLATFORM blok `DESIGN SYSTEM (REQUIRED):` z kolorami w formie `Nazwa (#hex) for <rola>` i fontami z DESIGN.md. Każdy prompt kończ zdaniem: "Do not ask questions. Make reasonable decisions and generate the screen now."
 4. Po KAŻDYM wywołaniu Stitcha przeczytaj `output_components`, zanim spojrzysz na ekrany. Jesteś użytkownikiem:
    - pytanie: odpowiedz, wywołując generate_screen_from_text ponownie z odpowiedzią jako promptem,
    - propozycje: wybierz tę, która pasuje do planu; odrzucaj dodatkowe podstrony (v1 to tylko strona główna),
