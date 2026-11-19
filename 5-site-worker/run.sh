@@ -37,17 +37,9 @@ LEAD_ID=$(jq -r .id <<<"$JOB")
 DIR="$HOME/site-jobs/$LEAD_ID-$(date +%Y%m%d-%H%M)"
 mkdir -p "$DIR/site" "$DIR/.claude/agents" && cp "$W/agents/"*.md "$DIR/.claude/agents/" && cd "$DIR" || exit 1
 
-# Losowy kierunek, paleta i typografia, żeby każde demo nie wyglądało jak domyślny Stitch
-pick() { jq -c ".$1[$RANDOM % (.$1|length)]" "$W/styles.json"; }
-STYLE=$(jq -n --argjson d "$(pick directions)" --argjson p "$(pick palettes)" --argjson t "$(pick type)" '{kierunek:$d,paleta:$p,typografia:$t}')
-echo "$STYLE" > style.json
-
 env -u SUPABASE_EMAIL -u SUPABASE_PASSWORD -u SUPABASE_ANON_KEY \
 timeout 60m claude -p "$(cat "$W/prompt.md")
-$JOB
-
-STYL (JSON):
-$STYLE" \
+$JOB" \
   --settings "$W/claude-settings.json" \
   --mcp-config "$CFG/stitch.json" --strict-mcp-config \
   --allowedTools "Read Write Edit Bash WebSearch WebFetch Skill Agent mcp__stitch__*" \
