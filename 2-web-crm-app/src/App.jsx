@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, isLocal } from './lib/api';
+import { supabase } from './lib/supabase';
 import { CHANGE_EVENT } from './lib/localApi';
 import { Layout, NAV } from './components/Layout';
 import { FullScreenLoader } from './components/ui';
@@ -89,6 +90,21 @@ export default function App() {
       window.removeEventListener('storage', onStorage);
     };
   }, [refreshStats]);
+
+  // Supabase: nowe firmy z wtyczki (i zmiany kolegów) pojawiają się bez odświeżania strony
+  useEffect(() => {
+    if (isLocal || !session) return undefined;
+    const channel = supabase
+      .channel('leads-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => {
+        setDataVersion((v) => v + 1);
+        refreshStats();
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session, refreshStats]);
 
   // Tytuł karty przeglądarki
   useEffect(() => {

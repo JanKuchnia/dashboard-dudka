@@ -280,7 +280,9 @@ begin
   select l.id
     into v_id
     from public.leads l
-   where l.status = 'NOWY'
+   where (l.status = 'NOWY'
+          -- „Nie odbiera” wraca do kolejki po 14 dniach (to samo w localApi.js)
+          or (l.status = 'NIE_ODEBRAL' and l.last_called_at <= now() - interval '14 days'))
      and (l.retry_at is null or l.retry_at <= now())
      and l.id <> all (coalesce(p_skip, '{}'))
      and (
@@ -347,7 +349,7 @@ as $$
                             from called),
     -- follow-upy zaplanowane na dziś lub zaległe
     'followups_due',     (select count(*) from public.leads
-                           where status = 'DO_ZASTANOWIENIA'
+                           where status in ('DO_ZASTANOWIENIA', 'CHCA')
                              and follow_up_at <= (now() at time zone p_tz)::date)
   );
 $$;
@@ -516,6 +518,13 @@ grant execute on function public.normalize_phone(text)                     to au
 grant execute on function public.log_call(uuid, text, text, date)          to authenticated, service_role;
 grant execute on function public.get_dashboard_stats(text)                 to authenticated, service_role;
 grant execute on function public.find_duplicates(text[], text[])           to authenticated, service_role;
+
+-- 9. REALTIME – aplikacja dostaje zmiany w `leads` na żywo (nowe firmy z wtyczki).
+do $$
+begin
+  alter publication supabase_realtime add table public.leads;
+exception when duplicate_object then null;
+end $$;
 
 -- =====================================================================
 --  KONIEC. Po uruchomieniu powinien pojawić się komunikat

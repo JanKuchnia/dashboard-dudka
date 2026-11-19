@@ -99,8 +99,8 @@ export function FollowUps({ onDataChanged, dataVersion }) {
         title="Follow-upy"
         description={
           leads
-            ? `${leads.length} firm do zastanowienia · ${dueCount} do oddzwonienia dzisiaj`
-            : 'Firmy ze statusem „Do zastanowienia”'
+            ? `${leads.length} firm z follow-upem · ${dueCount} do oddzwonienia dzisiaj`
+            : 'Firmy do zastanowienia i zainteresowane z datą kontaktu'
         }
         actions={
           <button onClick={load} className="btn-secondary">

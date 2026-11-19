@@ -87,7 +87,7 @@ const supabaseApi = {
       await supabase
         .from('leads')
         .select('*')
-        .eq('status', 'DO_ZASTANOWIENIA')
+        .or('status.eq.DO_ZASTANOWIENIA,and(status.eq.CHCA,follow_up_at.not.is.null)')
         .order('follow_up_at', { ascending: true, nullsFirst: false })
         .limit(1000),
     );

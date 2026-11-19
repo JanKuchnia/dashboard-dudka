@@ -5,6 +5,8 @@ import { normalizePhone, todayISO, noAnswerPatch } from './format';
 const STORAGE_KEY = 'lead-crm-local-v1';
 const OLD_DEMO_KEY = 'lead-crm-demo-v1';
 export const CHANGE_EVENT = 'lead-crm-changed';
+// „Nie odbiera” wraca do kolejki po tylu dniach (to samo w claim_next_lead w SQL)
+const daysAgoISO = (d) => new Date(Date.now() - d * 864e5).toISOString();
 
 const uuid = () =>
   globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -113,7 +115,10 @@ export const localApi = {
     return (
       getDb()
         .leads.filter(
-          (l) => l.status === 'NOWY' && !skipIds.includes(l.id) && (!l.retry_at || l.retry_at <= new Date().toISOString()),
+          (l) =>
+            (l.status === 'NOWY' || (l.status === 'NIE_ODEBRAL' && l.last_called_at <= daysAgoISO(14))) &&
+            !skipIds.includes(l.id) &&
+            (!l.retry_at || l.retry_at <= new Date().toISOString()),
         )
         .sort((a, b) => a.created_at.localeCompare(b.created_at))[0] ?? null
     );
@@ -152,7 +157,7 @@ export const localApi = {
   // --- Follow-upy ---
   async fetchFollowUps() {
     return getDb()
-      .leads.filter((l) => l.status === 'DO_ZASTANOWIENIA')
+      .leads.filter((l) => l.status === 'DO_ZASTANOWIENIA' || (l.status === 'CHCA' && l.follow_up_at))
       .sort(compare('follow_up_at', true));
   },
 
@@ -252,7 +257,7 @@ export const localApi = {
       called_total: called.length,
       success_rate: pct(interested, called.length),
       followups_due: leads.filter(
-        (l) => l.status === 'DO_ZASTANOWIENIA' && l.follow_up_at && l.follow_up_at <= t,
+        (l) => (l.status === 'DO_ZASTANOWIENIA' || l.status === 'CHCA') && l.follow_up_at && l.follow_up_at <= t,
       ).length,
     };
   },
