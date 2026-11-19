@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, MapPin, Phone, Globe, Plus, Check, Radar, AlertTriangle, ExternalLink, Info } from 'lucide-react';
+import { Search, MapPin, Phone, Globe, Plus, Check, Radar, AlertTriangle, ExternalLink, Info, History, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { CATEGORIES, geocode, searchBusinesses, toLeadRecord } from '../lib/osm';
 import { WEBSITE_STATUS } from '../lib/constants';
@@ -16,6 +16,26 @@ function loadPrefs() {
     return JSON.parse(localStorage.getItem(PREFS_KEY)) || {};
   } catch {
     return {};
+  }
+}
+
+const HISTORY_KEY = 'lead-crm-finder-history';
+const HISTORY_MAX = 8;
+
+function loadHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(list) {
+  // shortcut: localStorage (~5 MB) is per browser, not synced to Supabase; upgrade if history must follow the user across devices
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  } catch {
+    /* pełny limit – pomijamy zapis */
   }
 }
 
@@ -42,6 +62,37 @@ export function Finder({ onDataChanged, onNavigate }) {
   const [existing, setExisting] = useState({ placeIds: new Set(), phones: new Set() });
   const [selected, setSelected] = useState(new Set());
   const [importing, setImporting] = useState(false);
+
+  const [history, setHistory] = useState(loadHistory);
+
+  const openEntry = async (h) => {
+    setPlace(h.place);
+    setRadius(h.radius);
+    setCats(h.cats);
+    setCenter(h.center);
+    setResults(h.results);
+    setSelected(new Set());
+    setError('');
+    setExisting(await api.getExistingKeys(h.results).catch(() => ({ placeIds: new Set(), phones: new Set() })));
+  };
+
+  // po powrocie z innego widoku przywróć ostatnie wyszukiwanie
+  useEffect(() => {
+    if (history[0]) openEntry(history[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const removeEntry = (id) =>
+    setHistory((list) => {
+      const next = list.filter((h) => h.id !== id);
+      saveHistory(next);
+      return next;
+    });
+
+  const clearHistory = () => {
+    saveHistory([]);
+    setHistory([]);
+  };
 
   useEffect(() => {
     try {
@@ -99,6 +150,13 @@ export function Finder({ onDataChanged, onNavigate }) {
       });
       setExisting(await api.getExistingKeys(found));
       setResults(found);
+      const entry = { id: String(Date.now()), place: place.trim(), radius, cats, center: geo, results: found, at: Date.now() };
+      setHistory((list) => {
+        const same = (h) => h.place.toLowerCase() === entry.place.toLowerCase() && h.radius === radius && h.cats.join() === cats.join();
+        const next = [entry, ...list.filter((h) => !same(h))].slice(0, HISTORY_MAX);
+        saveHistory(next);
+        return next;
+      });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -227,6 +285,48 @@ export function Finder({ onDataChanged, onNavigate }) {
           </label>
         </div>
       </form>
+
+      {/* Poprzednie wyszukiwania */}
+      {history.length > 0 && (
+        <div className="mt-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="label mb-0">Poprzednie wyszukiwania</span>
+            <button type="button" onClick={clearHistory} className="text-xs font-medium text-zinc-500 hover:underline">
+              Wyczyść historię
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {history.map((h) => (
+              <span
+                key={h.id}
+                className="inline-flex items-center rounded-full border border-zinc-200 bg-white text-xs text-zinc-700"
+              >
+                <button
+                  type="button"
+                  onClick={() => openEntry(h)}
+                  disabled={loading}
+                  className="flex items-center gap-1.5 rounded-l-full py-1.5 pl-3 pr-2 hover:bg-zinc-50"
+                  title={`${h.cats.length} branż · ${new Date(h.at).toLocaleString('pl-PL')}`}
+                >
+                  <History className="size-3.5 text-zinc-400" />
+                  <span className="font-medium">{h.place}</span>
+                  <span className="text-zinc-400">
+                    {h.radius} km · {h.results.length} firm
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeEntry(h.id)}
+                  aria-label={`Usuń wyszukiwanie ${h.place}`}
+                  className="rounded-r-full py-1.5 pl-1 pr-2.5 text-zinc-400 hover:text-zinc-900"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Wyniki */}
       <div className="mt-6">
