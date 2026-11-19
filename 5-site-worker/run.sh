@@ -49,7 +49,7 @@ case "$CAT" in
   *nocleg*|*pensjonat*|*apartam*|*hostel*|*agrotur*) STYLE=nocleg ;;
   *) STYLE=fachowiec ;;
 esac
-cat "$W/designs/$STYLE.md" "$W/designs/_rules.md" > DESIGN.md
+cp "$W/designs/$STYLE.md" DESIGN.md
 
 env -u SUPABASE_EMAIL -u SUPABASE_PASSWORD -u SUPABASE_ANON_KEY \
 timeout 60m claude -p "$(cat "$W/prompt.md")
