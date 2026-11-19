@@ -37,6 +37,20 @@ LEAD_ID=$(jq -r .id <<<"$JOB")
 DIR="$HOME/site-jobs/$LEAD_ID-$(date +%Y%m%d-%H%M)"
 mkdir -p "$DIR/site" "$DIR/.claude/agents" && cp "$W/agents/"*.md "$DIR/.claude/agents/" && cd "$DIR" || exit 1
 
+# Styl według branży leada (5-site-worker/designs); nieznana branża dostaje "fachowiec"
+CAT=$(jq -r '.category // ""' <<<"$JOB" | tr '[:upper:]' '[:lower:]')
+case "$CAT" in
+  *fryz*|*barber*|*kosmet*|*paznok*|*urod*) STYLE=uroda ;;
+  *mechani*|*wulkaniz*|*opon*|*myjni*|*ślusar*|*slusar*|*klucz*|*warsztat*|*samoch*) STYLE=warsztat ;;
+  *restaur*|*pizz*|*fast*|*kawiar*|*cukier*|*piekar*|*kebab*|*bistro*|*bar\ *) STYLE=jedzenie ;;
+  *dent*|*stomat*|*fizjo*|*masaż*|*masaz*|*weteryn*|*optyk*) STYLE=zdrowie ;;
+  *siłown*|*silown*|*fitness*|*szkoła\ jazdy*|*szkola\ jazdy*) STYLE=aktywnie ;;
+  *kwiac*|*krawie*|*szew*|*pralni*|*zoolog*|*groom*|*mebl*|*stolar*|*fotograf*) STYLE=rzemioslo ;;
+  *nocleg*|*pensjonat*|*apartam*|*hostel*|*agrotur*) STYLE=nocleg ;;
+  *) STYLE=fachowiec ;;
+esac
+cp "$W/designs/$STYLE.md" DESIGN.md
+
 env -u SUPABASE_EMAIL -u SUPABASE_PASSWORD -u SUPABASE_ANON_KEY \
 timeout 60m claude -p "$(cat "$W/prompt.md")
 $JOB" \
