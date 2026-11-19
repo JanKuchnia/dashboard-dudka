@@ -1,6 +1,6 @@
 [Service]
 Type=oneshot
-Environment=PATH=%h/.local/bin:%h/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=%h/.local/bin:%h/.nvm/versions/node/v26.13.1/bin:%h/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=%h/.config/site-worker/env
 ExecStart=%h/dashboard-dudka/5-site-worker/run.sh
 TimeoutStartSec=90min
