@@ -35,7 +35,7 @@ const supabaseApi = {
     return data.session;
   },
   onAuthChange(callback) {
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => callback(session));
+    const { data } = supabase.auth.onAuthStateChange((event, session) => callback(session, event));
     return () => data.subscription.unsubscribe();
   },
   async signIn(email, password) {
@@ -45,6 +45,16 @@ const supabaseApi = {
   },
   async signOut() {
     await supabase.auth.signOut();
+  },
+  // Link z maila wraca na ten adres; supabase-js zgłasza wtedy zdarzenie PASSWORD_RECOVERY
+  async resetPassword(email) {
+    const redirectTo = window.location.origin + window.location.pathname;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) throw new Error(translateError(error));
+  },
+  async updatePassword(password) {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw new Error(translateError(error));
   },
 
   // --- Power Dialer ---

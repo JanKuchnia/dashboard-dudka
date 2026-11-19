@@ -108,3 +108,19 @@ export function prettyUrl(url) {
 export function classNames(...args) {
   return args.filter(Boolean).join(' ');
 }
+
+/**
+ * Zmiany leada po wyniku „Nie odebrał” (tryb lokalny). Ta sama reguła jest
+ * w SQL (log_call) – zmieniaj je razem.
+ * misses = ile razy wcześniej już nie odebrał.
+ */
+export function noAnswerPatch(lead, misses, followUpAt, now = new Date()) {
+  if (lead.status === 'NOWY') {
+    return misses >= 2
+      ? { status: 'NIE_ODEBRAL', retry_at: null, follow_up_at: followUpAt || null }
+      : { status: 'NOWY', retry_at: new Date(now.getTime() + 3 * 3600e3).toISOString(), follow_up_at: followUpAt || null };
+  }
+  if (lead.status === 'NIE_ODEBRAL') return { status: 'NIE_ODEBRAL', retry_at: null, follow_up_at: followUpAt || null };
+  const tomorrow = addDays(toISODate(now), 1);
+  return { status: lead.status, retry_at: null, follow_up_at: followUpAt && followUpAt > tomorrow ? followUpAt : tomorrow };
+}

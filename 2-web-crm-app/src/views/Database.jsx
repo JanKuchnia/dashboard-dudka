@@ -295,13 +295,14 @@ export function Database({ stats, onDataChanged, onNavigate, dataVersion }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
-                  {data.rows.map((l) => {
+                  {data.rows.map((l, i) => {
                     const fu = daysFromToday(l.follow_up_at);
                     return (
                       <tr
                         key={l.id}
                         onClick={() => setDrawer({ open: true, lead: l })}
-                        className="cursor-pointer transition hover:bg-zinc-50"
+                        style={{ '--i': i }}
+                        className="stagger-in cursor-pointer transition hover:bg-zinc-50"
                       >
                         <td className="max-w-72 px-4 py-3">
                           <div className="truncate font-medium text-zinc-900">{l.company_name}</div>
@@ -348,8 +349,8 @@ export function Database({ stats, onDataChanged, onNavigate, dataVersion }) {
 
             {/* Telefon – karty */}
             <ul className="divide-y divide-zinc-100 md:hidden">
-              {data.rows.map((l) => (
-                <li key={l.id}>
+              {data.rows.map((l, i) => (
+                <li key={l.id} style={{ '--i': i }} className="stagger-in">
                   <button onClick={() => setDrawer({ open: true, lead: l })} className="w-full px-4 py-3.5 text-left">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">

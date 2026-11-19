@@ -84,7 +84,8 @@ create table if not exists public.leads (
       'NOWY',               -- czeka w kolejce Power Dialera
       'CHCA',               -- 🟢 Chcą
       'DO_ZASTANOWIENIA',   -- 🟡 Do zastanowienia (follow-up)
-      'NIE_CHCA'            -- 🔴 Nie chcą
+      'NIE_CHCA',           -- 🔴 Nie chcą
+      'NIE_ODEBRAL'         -- ⚪ 3× nie odebrał – odłożony, poza kolejką
     )),
   notes                     text,                       -- notatka z ostatniej rozmowy
   follow_up_at              date,                       -- data kolejnego kontaktu
@@ -110,9 +111,16 @@ create table if not exists public.leads (
 -- dograć te kolumny do już istniejącej bazy.
 alter table public.leads add column if not exists claimed_by uuid references auth.users (id) on delete set null;
 alter table public.leads add column if not exists claimed_at timestamptz;
+-- „Nie odebrał” – lead wraca do kolejki dopiero po tym czasie
+alter table public.leads add column if not exists retry_at timestamptz;
+
+-- Nowe statusy dla baz założonych wcześniej (CHECK w create table się nie zaktualizuje)
+alter table public.leads drop constraint if exists leads_status_check;
+alter table public.leads add constraint leads_status_check
+  check (status in ('NOWY', 'CHCA', 'DO_ZASTANOWIENIA', 'NIE_CHCA', 'NIE_ODEBRAL'));
 
 comment on table  public.leads                 is 'Firmy (leady) do cold callingu.';
-comment on column public.leads.status          is 'NOWY | CHCA | DO_ZASTANOWIENIA | NIE_CHCA';
+comment on column public.leads.status          is 'NOWY | CHCA | DO_ZASTANOWIENIA | NIE_CHCA | NIE_ODEBRAL';
 comment on column public.leads.website_status  is 'BRAK_WWW | TYLKO_FB | TYLKO_IG | TYLKO_BOOKSY | INNE_SOCIAL | MA_WWW';
 
 
@@ -123,11 +131,15 @@ create table if not exists public.call_logs (
   id            bigint generated always as identity primary key,
   lead_id       uuid not null references public.leads (id) on delete cascade,
   created_at    timestamptz not null default now(),
-  outcome       text not null check (outcome in ('CHCA', 'DO_ZASTANOWIENIA', 'NIE_CHCA')),
+  outcome       text not null check (outcome in ('CHCA', 'DO_ZASTANOWIENIA', 'NIE_CHCA', 'NIE_ODEBRAL')),
   notes         text,
   follow_up_at  date,
   user_id       uuid default auth.uid() references auth.users (id) on delete set null
 );
+
+alter table public.call_logs drop constraint if exists call_logs_outcome_check;
+alter table public.call_logs add constraint call_logs_outcome_check
+  check (outcome in ('CHCA', 'DO_ZASTANOWIENIA', 'NIE_CHCA', 'NIE_ODEBRAL'));
 
 comment on table public.call_logs is 'Każde kliknięcie „Zapisz i następny” = jeden wpis.';
 
@@ -195,16 +207,38 @@ security invoker
 set search_path = ''
 as $$
 declare
-  v_lead public.leads;
+  v_lead   public.leads;
+  v_status text := p_outcome;
+  v_follow date := p_follow_up_at;
+  v_retry  timestamptz;
+  v_today  date := (now() at time zone 'Europe/Warsaw')::date;
 begin
-  if p_outcome not in ('CHCA', 'DO_ZASTANOWIENIA', 'NIE_CHCA') then
+  if p_outcome not in ('CHCA', 'DO_ZASTANOWIENIA', 'NIE_CHCA', 'NIE_ODEBRAL') then
     raise exception 'Nieprawidłowy wynik rozmowy: %', p_outcome;
   end if;
 
+  -- „Nie odebrał”: nowy lead wraca do kolejki za 3 h, po 3. razie zostaje odłożony.
+  -- Lead z follow-upu zachowuje status, a kontakt przesuwa się najwcześniej na jutro.
+  -- Ta sama reguła jest w localApi.js (tryb lokalny) – zmieniaj je razem.
+  if p_outcome = 'NIE_ODEBRAL' then
+    select status into v_status from public.leads where id = p_lead_id;
+    if v_status = 'NOWY' then
+      if (select count(*) from public.call_logs
+           where lead_id = p_lead_id and outcome = 'NIE_ODEBRAL') >= 2 then
+        v_status := 'NIE_ODEBRAL';
+      else
+        v_retry := now() + interval '3 hours';
+      end if;
+    elsif v_status <> 'NIE_ODEBRAL' then
+      v_follow := greatest(coalesce(p_follow_up_at, v_today + 1), v_today + 1);
+    end if;
+  end if;
+
   update public.leads
-     set status         = p_outcome,
+     set status         = coalesce(v_status, status),
          notes          = nullif(trim(p_notes), ''),
-         follow_up_at   = p_follow_up_at,
+         follow_up_at   = v_follow,
+         retry_at       = v_retry,
          last_called_at = now(),
          call_count     = call_count + 1,
          claimed_by     = null,
@@ -247,6 +281,7 @@ begin
     into v_id
     from public.leads l
    where l.status = 'NOWY'
+     and (l.retry_at is null or l.retry_at <= now())
      and l.id <> all (coalesce(p_skip, '{}'))
      and (
            l.claimed_at is null
@@ -288,18 +323,18 @@ as $$
      where c.created_at >= d.ts
   ),
   called as (
-    select status from public.leads where status <> 'NOWY'
+    select status from public.leads where status not in ('NOWY', 'NIE_ODEBRAL')
   )
   select json_build_object(
     -- liczba różnych firm obdzwonionych dzisiaj
     'calls_today',       (select count(distinct lead_id) from today),
     -- dzisiejsze rozmowy zakończone „Chcą”
     'interested_today',  (select count(distinct lead_id) from today where outcome = 'CHCA'),
-    -- skuteczność dzisiaj w %
+    -- skuteczność dzisiaj w % (tylko rozmowy, w których ktoś odebrał)
     'success_rate_today',(select case when count(distinct lead_id) = 0 then 0
                                       else round(100.0 * count(distinct lead_id) filter (where outcome = 'CHCA')
                                                  / count(distinct lead_id), 1) end
-                            from today),
+                            from today where outcome <> 'NIE_ODEBRAL'),
     -- łącznie w bazie
     'interested_total',  (select count(*) from public.leads where status = 'CHCA'),
     'thinking_total',    (select count(*) from public.leads where status = 'DO_ZASTANOWIENIA'),

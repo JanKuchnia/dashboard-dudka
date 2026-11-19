@@ -11,7 +11,12 @@ function Kpi({ icon: Icon, label, value, sub, accent }) {
         </span>
       </div>
       <div>
-        <div className="text-2xl font-semibold tabular-nums tracking-tight text-zinc-900">{value}</div>
+        <div className="overflow-hidden text-2xl font-semibold tabular-nums tracking-tight text-zinc-900">
+          {/* key = wartość → przy zmianie liczba wjeżdża od dołu */}
+          <span key={value} className="inline-block animate-tick">
+            {value}
+          </span>
+        </div>
         {sub && <div className="mt-0.5 text-xs text-zinc-500">{sub}</div>}
       </div>
     </div>

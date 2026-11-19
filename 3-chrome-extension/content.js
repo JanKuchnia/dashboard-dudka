@@ -26,6 +26,7 @@
     CHCA: 'Chcą',
     DO_ZASTANOWIENIA: 'Do zastanowienia',
     NIE_CHCA: 'Nie chcą',
+    NIE_ODEBRAL: 'Nie odbiera',
   };
 
   const PHONE_RE = /(?:\+48[\s-]?)?(?:\d{3}[\s-]?\d{3}[\s-]?\d{3}|\d{2}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2})/;
@@ -76,6 +77,28 @@
     }
     for (const c of [].concat(children)) if (c) node.append(c);
     return node;
+  }
+
+  // Ikony Lucide (licencja ISC) jako SVG – wtyczka nie ma bundlera
+  const ICONS = {
+    phone: ['M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384'],
+    plus: ['M5 12h14', 'M12 5v14'],
+    alert: ['m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3', 'M12 9v4', 'M12 17h.01'],
+    check: ['M20 6 9 17l-5-5'],
+  };
+  function icon(name) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    for (const [k, v] of Object.entries({
+      class: 'crmx-svg', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
+      'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true',
+    })) svg.setAttribute(k, v);
+    for (const d of ICONS[name]) {
+      const p = document.createElementNS(NS, 'path');
+      p.setAttribute('d', d);
+      svg.append(p);
+    }
+    return svg;
   }
 
   /** Wyciąga prawdziwy adres z przekierowań Google (/url?q=...) */
@@ -288,11 +311,11 @@
 
     if (dup) {
       box.append(
-        el('span', {
-          class: 'crmx-badge crmx-b-dup',
-          title: `Ta firma jest już w CRM (${dup.company_name})`,
-          text: `⚠ W BAZIE – ${STATUS_LABEL[dup.status] || dup.status}`,
-        }),
+        el(
+          'span',
+          { class: 'crmx-badge crmx-b-dup', title: `Ta firma jest już w CRM (${dup.company_name})` },
+          [icon('alert'), `W BAZIE – ${STATUS_LABEL[dup.status] || dup.status}`],
+        ),
       );
     } else {
       box.append(el('span', { class: `crmx-badge ${w.cls}`, text: w.label }));
@@ -418,7 +441,7 @@
       selected.delete(i.key);
     }
     setMessage(
-      `✓ Dodano ${inserted} ${inserted === 1 ? 'firmę' : 'firm'} do CRM${skipped ? ` · ${skipped} już było w bazie` : ''}.`,
+      `Dodano ${inserted} ${inserted === 1 ? 'firmę' : 'firm'} do CRM${skipped ? ` · ${skipped} już było w bazie` : ''}.`,
       'success',
     );
     renderAll();
@@ -463,7 +486,7 @@
     // Nagłówek
     panel.append(
       el('div', { class: 'crmx-head' }, [
-        el('div', { class: 'crmx-title' }, [el('span', { class: 'crmx-logo', text: '☎' }), el('span', { text: 'Lead Scanner' })]),
+        el('div', { class: 'crmx-title' }, [el('span', { class: 'crmx-logo' }, [icon('phone')]), el('span', { text: 'Lead Scanner' })]),
         el('button', {
           class: 'crmx-icon-btn',
           title: settings.collapsed ? 'Rozwiń' : 'Zwiń',
@@ -578,13 +601,12 @@
         ]),
       ]);
       if (dup) {
-        box.append(el('div', { class: 'crmx-dup-note', text: `⚠ Już w CRM · ${STATUS_LABEL[dup.status] || dup.status}` }));
+        box.append(el('div', { class: 'crmx-dup-note' }, [icon('alert'), `Już w CRM · ${STATUS_LABEL[dup.status] || dup.status}`]));
       } else {
-        const b = el('button', {
-          class: 'crmx-btn crmx-btn-primary',
-          text: '➕ Dodaj tę firmę do CRM',
-          onclick: () => sendItems([detail]),
-        });
+        const b = el('button', { class: 'crmx-btn crmx-btn-primary', onclick: () => sendItems([detail]) }, [
+          icon('plus'),
+          'Dodaj tę firmę do CRM',
+        ]);
         if (busy) b.disabled = true;
         box.append(b);
       }
@@ -592,7 +614,8 @@
     }
 
     if (lastMessage.text) {
-      panel.append(el('div', { class: `crmx-msg crmx-msg-${lastMessage.type}`, text: lastMessage.text }));
+      const ico = { success: 'check', error: 'alert' }[lastMessage.type];
+      panel.append(el('div', { class: `crmx-msg crmx-msg-${lastMessage.type}` }, [ico && icon(ico), lastMessage.text]));
     }
   }
 

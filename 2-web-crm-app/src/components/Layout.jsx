@@ -114,7 +114,7 @@ export function Layout({ view, onNavigate, stats, user, local, onSignOut, childr
         )}
       </header>
 
-      <main className="mx-auto w-full max-w-7xl px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-10">{children}</main>
+      <main key={view} className="mx-auto w-full max-w-7xl animate-view-in px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-10">{children}</main>
 
       {/* Dolny pasek nawigacji – telefon */}
       <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-zinc-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">

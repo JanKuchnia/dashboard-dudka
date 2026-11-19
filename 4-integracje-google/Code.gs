@@ -24,6 +24,7 @@ const STATUS_LABELS = {
   CHCA: 'Chcą',
   DO_ZASTANOWIENIA: 'Do zastanowienia',
   NIE_CHCA: 'Nie chcą',
+  NIE_ODEBRAL: 'Nie odbiera',
 };
 
 const WEBSITE_LABELS = {

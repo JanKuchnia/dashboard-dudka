@@ -55,7 +55,7 @@ export function CallForm({ lead, onSaved, onSkip, submitLabel = 'Zapisz i nastę
     }
   }, [outcome, notes, followUp, lead, onSaved, toast]);
 
-  // Skróty klawiszowe: 1/2/3 = wynik, Ctrl+Enter = zapisz, S = pomiń
+  // Skróty klawiszowe: 1–4 = wynik, Ctrl+Enter = zapisz, S = pomiń
   useEffect(() => {
     if (!shortcuts) return undefined;
     const handler = (e) => {
@@ -148,7 +148,7 @@ export function CallForm({ lead, onSaved, onSkip, submitLabel = 'Zapisz i nastę
       {/* Wynik rozmowy */}
       <div>
         <span className="label">Wynik rozmowy</span>
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
           {OUTCOMES.map((o) => {
             const active = outcome === o.value;
             return (
@@ -162,9 +162,11 @@ export function CallForm({ lead, onSaved, onSkip, submitLabel = 'Zapisz i nastę
                   active ? o.active : o.idle,
                 )}
               >
-                <span className="text-xl sm:text-2xl" aria-hidden>
-                  {o.emoji}
-                </span>
+                <o.icon
+                  key={active ? 'on' : 'off'}
+                  className={classNames('size-5 sm:size-6', active && 'animate-icon-pop')}
+                  aria-hidden
+                />
                 <span className="leading-tight">{o.label}</span>
                 {shortcuts && (
                   <span className="absolute right-2 top-2 hidden sm:block">
