@@ -242,7 +242,7 @@ export function Finder({ onDataChanged, onNavigate }) {
 
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <span className="label mb-0">Branże ({cats.length})</span>
+            <span className="label mb-0">Branże ({cats.length || 'wszystkie firmy'})</span>
             <div className="flex gap-3 text-xs font-medium">
               <button type="button" onClick={() => setCats(CATEGORIES.map((c) => c.id))} className="text-indigo-600 hover:underline">
                 Zaznacz wszystkie

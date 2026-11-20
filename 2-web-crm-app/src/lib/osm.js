@@ -38,6 +38,22 @@ export const CATEGORIES = [
   { id: 'meble', label: 'Meble / Stolarz', filters: ['["shop"="furniture"]', '["craft"="joiner"]'], phrases: ['furniture shop'] },
 ];
 
+// Brak wybranych branż = wszystkie firmy w promieniu (sklepy, usługi, rzemiosło, biura, gastronomia…)
+const ANY_BUSINESS = {
+  id: 'wszystkie',
+  label: '',
+  filters: [
+    '["shop"]',
+    '["craft"]',
+    '["office"]',
+    '["healthcare"]',
+    '["amenity"~"^(restaurant|cafe|fast_food|bar|pub|ice_cream|dentist|doctors|clinic|pharmacy|veterinary|car_wash|car_rental|driving_school|fuel)$"]',
+    '["tourism"~"^(hotel|motel|guest_house|hostel|apartment|chalet)$"]',
+    '["leisure"~"^(fitness_centre|sports_centre)$"]',
+  ],
+  phrases: [...new Set(CATEGORIES.flatMap((c) => c.phrases))],
+};
+
 const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.private.coffee/api/interpreter',
@@ -84,8 +100,8 @@ export async function geocode(query) {
  * Najpierw Overpass (pełne dane), a gdy jego serwery są przeciążone – Nominatim.
  */
 export async function searchBusinesses({ lat, lon, radius, categoryIds, fallbackCity, onProgress }) {
-  const cats = CATEGORIES.filter((c) => categoryIds.includes(c.id));
-  if (!cats.length) throw new Error('Wybierz co najmniej jedną branżę.');
+  const picked = CATEGORIES.filter((c) => categoryIds.includes(c.id));
+  const cats = picked.length ? picked : [ANY_BUSINESS];
 
   let found;
   try {
@@ -131,8 +147,10 @@ async function searchOverpass({ lat, lon, radius, cats, fallbackCity }) {
     const key = `osm:${el.type}/${el.id}`;
     if (!t.name || seen.has(key)) continue;
     seen.add(key);
-    const category = cats.find((c) => c.filters.some((f) => matchesFilter(t, f)));
-    results.push(toLead(t, {}, key, category?.label ?? '', el.lat ?? el.center?.lat, el.lon ?? el.center?.lon, lat, lon, fallbackCity));
+    // W trybie „wszystkie” etykieta z naszych branż, a gdy brak – surowy tag OSM (np. „bakery”)
+    const category = (cats[0] === ANY_BUSINESS ? CATEGORIES : cats).find((c) => c.filters.some((f) => matchesFilter(t, f)));
+    const label = category?.label ?? firstValue(t.shop || t.craft || t.office || t.healthcare || t.amenity || t.tourism || t.leisure);
+    results.push(toLead(t, {}, key, label, el.lat ?? el.center?.lat, el.lon ?? el.center?.lon, lat, lon, fallbackCity));
   }
   return results;
 }
@@ -151,7 +169,7 @@ async function searchNominatim({ lat, lon, radius, cats, fallbackCity, onProgres
 
   for (let j = 0; j < jobs.length; j++) {
     const { cat, phrase } = jobs[j];
-    onProgress?.(`Szukam: ${cat.label} (${j + 1}/${jobs.length})…`);
+    onProgress?.(`Szukam: ${cat.label || phrase} (${j + 1}/${jobs.length})…`);
     const exclude = [];
     for (let page = 0; page < MAX_PAGES; page++) {
       const url =
@@ -172,7 +190,7 @@ async function searchNominatim({ lat, lon, radius, cats, fallbackCity, onProgres
         const key = `osm:${p.osm_type}/${p.osm_id}`;
         if (!p.name || seen.has(key)) continue;
         seen.add(key);
-        const lead = toLead(p.extratags || {}, p.address || {}, key, cat.label, Number(p.lat), Number(p.lon), lat, lon, fallbackCity, p.name);
+        const lead = toLead(p.extratags || {}, p.address || {}, key, cat.label || p.type || '', Number(p.lat), Number(p.lon), lat, lon, fallbackCity, p.name);
         if (lead.distance <= radius * 1.05) results.push(lead);
       }
       await sleep(1100); // zasady Nominatim: maks. 1 zapytanie na sekundę
