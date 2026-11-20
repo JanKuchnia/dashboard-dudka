@@ -1,0 +1,6 @@
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/site-worker/env
+WorkingDirectory=%h/overture
+ExecStart=%h/overture/venv/bin/python %h/dashboard-dudka/6-overture/extract.py
+TimeoutStartSec=3h

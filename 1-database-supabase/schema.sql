@@ -716,6 +716,116 @@ revoke execute on function public.finish_site_job(uuid, text, text, text, text) 
 grant  execute on function public.finish_site_job(uuid, text, text, text, text) to authenticated;
 
 -- =====================================================================
+--  BAZA FIRM (Overture Maps) – wyszukiwarka firm w Finderze
+--  Miesięczny import z homelaba (6-overture/extract.py) wgrywa firmy z Polski.
+--  Zapis tylko przez upsert_places (konto workera), odczyt dla zespołu.
+--  Szukanie po promieniu: ramka lat/lon z indeksu + dokładny dystans (haversine).
+-- =====================================================================
+create table if not exists public.places (
+  id         text primary key,          -- id z Overture
+  name       text not null,
+  category   text not null,             -- id branży z CRM (osm.js CATEGORIES)
+  taxonomy   text,                      -- surowa kategoria Overture
+  phone      text,
+  website    text,
+  social     text,                      -- pierwszy profil społecznościowy (FB/IG)
+  address    text,
+  city       text,
+  lat        double precision not null,
+  lon        double precision not null,
+  confidence real,
+  release    text not null              -- wydanie Overture, z którego pochodzi wiersz
+);
+create index if not exists places_lat_lon_idx on public.places (lat, lon);
+
+alter table public.places enable row level security;
+revoke all on public.places from anon;
+create policy "Zespół – odczyt firm" on public.places for select to authenticated using ((select public.is_team_member()));
+
+create or replace function public.search_places(
+  p_lat double precision, p_lon double precision, p_radius double precision,
+  p_categories text[] default null, p_limit int default 1500
+)
+returns table (
+  id text, name text, category text, phone text, website text, social text,
+  address text, city text, lat double precision, lon double precision, distance double precision
+)
+language sql
+stable
+set search_path = ''
+as $$
+  select id, name, category, phone, website, social, address, city, lat, lon, distance
+  from (
+    select p.id, p.name, p.category, p.phone, p.website, p.social, p.address, p.city, p.lat, p.lon,
+           2 * 6371000 * asin(sqrt(
+             sin(radians(p.lat - p_lat) / 2) ^ 2 +
+             cos(radians(p_lat)) * cos(radians(p.lat)) * sin(radians(p.lon - p_lon) / 2) ^ 2
+           )) as distance
+      from public.places p
+     where p.lat between p_lat - p_radius / 111320.0 and p_lat + p_radius / 111320.0
+       and p.lon between p_lon - p_radius / (111320.0 * cos(radians(p_lat)))
+                     and p_lon + p_radius / (111320.0 * cos(radians(p_lat)))
+       and (p_categories is null or cardinality(p_categories) = 0 or p.category = any (p_categories))
+  ) q
+  where distance <= p_radius
+  order by distance
+  limit least(p_limit, 3000);
+$$;
+revoke execute on function public.search_places(double precision, double precision, double precision, text[], int) from public, anon;
+grant  execute on function public.search_places(double precision, double precision, double precision, text[], int) to authenticated;
+
+-- Import: paczka wierszy (jsonb). Tylko konto workera.
+create or replace function public.upsert_places(p_rows jsonb)
+returns int
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  n int;
+begin
+  if not public.is_site_worker() then
+    raise exception 'Brak uprawnień';
+  end if;
+  insert into public.places (id, name, category, taxonomy, phone, website, social, address, city, lat, lon, confidence, release)
+  select r.id, r.name, r.category, r.taxonomy, r.phone, r.website, r.social, r.address, r.city, r.lat, r.lon, r.confidence, r.release
+    from jsonb_to_recordset(p_rows) as r(
+      id text, name text, category text, taxonomy text, phone text, website text, social text,
+      address text, city text, lat double precision, lon double precision, confidence real, release text)
+  on conflict (id) do update set
+    name = excluded.name, category = excluded.category, taxonomy = excluded.taxonomy,
+    phone = excluded.phone, website = excluded.website, social = excluded.social,
+    address = excluded.address, city = excluded.city, lat = excluded.lat, lon = excluded.lon,
+    confidence = excluded.confidence, release = excluded.release;
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+revoke execute on function public.upsert_places(jsonb) from public, anon;
+grant  execute on function public.upsert_places(jsonb) to authenticated;
+
+-- Po pełnym imporcie: usuwa wiersze ze starszych wydań (firmy, których już nie ma w Overture).
+create or replace function public.prune_places(p_release text)
+returns int
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  n int;
+begin
+  if not public.is_site_worker() then
+    raise exception 'Brak uprawnień';
+  end if;
+  delete from public.places where release <> p_release;
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+revoke execute on function public.prune_places(text) from public, anon;
+grant  execute on function public.prune_places(text) to authenticated;
+
+-- =====================================================================
 --  KONIEC. Po uruchomieniu powinien pojawić się komunikat
 --  „Success. No rows returned”.
 -- =====================================================================
