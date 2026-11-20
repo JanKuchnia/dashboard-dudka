@@ -2,6 +2,7 @@
 //  • Nominatim – zamienia nazwę miasta / adres na współrzędne,
 //  • Overpass  – zwraca firmy danej branży w promieniu od tego punktu.
 import { normalizePhone } from './format';
+import { supabase } from './supabase';
 
 // Branże: etykieta → filtry tagów OpenStreetMap (Overpass) i frazy wyszukiwania (Nominatim – zapas)
 export const CATEGORIES = [
@@ -102,6 +103,20 @@ export async function geocode(query) {
 export async function searchBusinesses({ lat, lon, radius, categoryIds, fallbackCity, onProgress }) {
   const picked = CATEGORIES.filter((c) => categoryIds.includes(c.id));
   const cats = picked.length ? picked : [ANY_BUSINESS];
+
+  // Najpierw własna baza (Overture, tabela places); pusta lub niedostępna = OpenStreetMap
+  if (supabase) {
+    try {
+      onProgress?.('Szukam w bazie firm…');
+      const { data, error } = await supabase.rpc('search_places', {
+        p_lat: lat, p_lon: lon, p_radius: radius, p_categories: picked.map((c) => c.id), p_limit: 1500,
+      });
+      if (error) throw error;
+      if (data.length) return data.map((p) => placeToLead(p, fallbackCity));
+    } catch {
+      // brak tabeli / sieci – lecimy dalej na OSM
+    }
+  }
 
   let found;
   try {
@@ -282,6 +297,29 @@ function toLead(t, addr, key, categoryLabel, lat, lon, cLat, cLon, fallbackCity,
     google_rating: null,
     google_reviews_count: null,
     distance: lat != null && lon != null ? distanceMeters(cLat, cLon, lat, lon) : 1e9,
+  };
+}
+
+/** Wiersz z search_places → ten sam kształt co z OSM */
+function placeToLead(p, fallbackCity) {
+  const url = p.website || p.social || '';
+  const city = p.city || fallbackCity || '';
+  const label = (CATEGORIES.find((c) => c.id === p.category)?.label ?? p.category).split(' / ')[0];
+  return {
+    key: `ovt:${p.id}`,
+    company_name: p.name,
+    category: label,
+    city: city || null,
+    address: p.address || null,
+    phone: p.phone,
+    phone_normalized: normalizePhone(p.phone) || null,
+    website_url: url || null,
+    website_status: classifyWebsite(url),
+    maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([p.name, p.address, city].filter(Boolean).join(' '))}`,
+    maps_place_id: `ovt:${p.id}`,
+    google_rating: null,
+    google_reviews_count: null,
+    distance: p.distance,
   };
 }
 
