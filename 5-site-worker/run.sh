@@ -27,6 +27,10 @@ rpc() { # rpc <name> <json body>
 finish() { # finish <GOTOWA|BLAD> <repo> <preview> <error>
   rpc finish_site_job "$(jq -n --arg id "$LEAD_ID" --arg s "$1" --arg r "$2" --arg p "$3" --arg e "$4" \
     '{p_lead_id:$id,p_status:$s,p_repo_url:(if $r=="" then null else $r end),p_preview_url:(if $p=="" then null else $p end),p_error:(if $e=="" then null else $e end)}')" >/dev/null
+  # Push na telefon przez ntfy (bez nazwy firmy); brak NTFY_TOPIC = bez powiadomienia
+  [ -n "${NTFY_TOPIC:-}" ] && curl -s -m 10 -o /dev/null "https://ntfy.sh/$NTFY_TOPIC" \
+    -H "Title: $([ "$1" = GOTOWA ] && echo 'Strona gotowa' || echo 'Strona: blad budowy')" \
+    ${3:+-H "Click: $3"} -d "$([ "$1" = GOTOWA ] && echo 'Demo czeka na podgląd' || echo 'Sprawdź szczegóły w CRM')" || true
 }
 
 TOKEN=$(token) || { echo "logowanie do Supabase nie działa" >&2; exit 1; }
