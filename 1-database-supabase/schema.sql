@@ -740,6 +740,7 @@ create index if not exists places_lat_lon_idx on public.places (lat, lon);
 
 alter table public.places enable row level security;
 revoke all on public.places from anon;
+grant select on public.places to authenticated;
 create policy "Zespół – odczyt firm" on public.places for select to authenticated using ((select public.is_team_member()));
 
 create or replace function public.search_places(
