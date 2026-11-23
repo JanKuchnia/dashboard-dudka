@@ -827,6 +827,133 @@ revoke execute on function public.prune_places(text) from public, anon;
 grant  execute on function public.prune_places(text) to authenticated;
 
 -- =====================================================================
+--  POPRAWKI OD KLIENTA (client-edit.js na demo stronie)
+--  Klient otwiera demo z ?edit=<edit_token>, klika elementy i wysyła zgłoszenie.
+--  Anon nie ma dostępu do tabel: tylko submit_change_request i upload zdjęć
+--  do bucketu change-uploads pod folderem z ważnym tokenem.
+-- =====================================================================
+alter table public.leads add column if not exists edit_token text
+  not null default replace(gen_random_uuid()::text, '-', '');
+create unique index if not exists leads_edit_token_key on public.leads (edit_token);
+
+create table if not exists public.change_requests (
+  id          uuid primary key default gen_random_uuid(),
+  lead_id     uuid not null references public.leads (id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  markdown    text not null,
+  item_count  integer not null default 0,
+  files       text[] not null default '{}',   -- ścieżki w buckecie change-uploads
+  status      text not null default 'NOWA' check (status in ('NOWA', 'ZROBIONA'))
+);
+create index if not exists change_requests_lead_idx on public.change_requests (lead_id, created_at desc);
+alter table public.change_requests enable row level security;
+drop policy if exists "Zespół: poprawki" on public.change_requests;
+create policy "Zespół: poprawki" on public.change_requests
+  for all to authenticated using (public.is_team_member()) with check (public.is_team_member());
+
+create or replace function public.valid_edit_token(p_token text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (select 1 from public.leads where edit_token = p_token);
+$$;
+revoke execute on function public.valid_edit_token(text) from public;
+grant  execute on function public.valid_edit_token(text) to anon, authenticated;
+
+create or replace function public.submit_change_request(
+  p_token text, p_markdown text, p_count integer, p_files text[]
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_lead uuid;
+  v_files text[];
+begin
+  select id into v_lead from public.leads where edit_token = p_token;
+  if v_lead is null then
+    raise exception 'Nieprawidłowy link do edycji';
+  end if;
+  if p_markdown is null or length(p_markdown) > 200000 then
+    raise exception 'Zgłoszenie jest za duże';
+  end if;
+  if (select count(*) from public.change_requests
+       where lead_id = v_lead and created_at > now() - interval '1 hour') >= 10 then
+    raise exception 'Za dużo zgłoszeń, spróbuj za godzinę';
+  end if;
+  -- Tylko pliki z folderu tego tokenu, nazwane jak robi to widżet
+  select coalesce(array_agg(distinct f), '{}') into v_files
+    from unnest(coalesce(p_files, '{}')) f
+   where f ~ ('^' || p_token || '/[0-9a-f]{16}\.[a-z]{3,4}$');
+  insert into public.change_requests (lead_id, markdown, item_count, files)
+  values (v_lead, p_markdown, greatest(coalesce(p_count, 0), 0), v_files[1:30]);
+end;
+$$;
+revoke execute on function public.submit_change_request(text, text, integer, text[]) from public;
+grant  execute on function public.submit_change_request(text, text, integer, text[]) to anon, authenticated;
+
+-- Push na telefon (ntfy) po każdym zgłoszeniu, bez nazwy firmy.
+-- Temat ntfy NIE jest w repo – ustaw go raz w SQL Editorze:
+--   insert into public.notify_config (id, ntfy_topic) values (1, 'TWÓJ_TEMAT')
+--   on conflict (id) do update set ntfy_topic = excluded.ntfy_topic;
+-- Brak wiersza = brak powiadomień.
+create extension if not exists pg_net with schema extensions;
+create table if not exists public.notify_config (
+  id         integer primary key check (id = 1),
+  ntfy_topic text not null
+);
+alter table public.notify_config enable row level security;
+revoke all on public.notify_config from anon, authenticated;
+
+create or replace function public.notify_change_request()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_topic text;
+begin
+  select ntfy_topic into v_topic from public.notify_config where id = 1;
+  if v_topic is not null then
+    -- pg_net wysyła asynchronicznie, więc błąd ntfy nie zablokuje zapisu zgłoszenia
+    perform net.http_post(
+      url  := 'https://ntfy.sh',
+      body := jsonb_build_object(
+        'topic',   v_topic,
+        'title',   'Nowe poprawki od klienta',
+        'message', new.item_count || ' zmian(y) czeka w CRM',
+        'click',   'https://lead-crm-psi-lemon.vercel.app'
+      )
+    );
+  end if;
+  return new;
+end;
+$$;
+revoke execute on function public.notify_change_request() from public, anon, authenticated;
+drop trigger if exists change_requests_notify on public.change_requests;
+create trigger change_requests_notify after insert on public.change_requests
+  for each row execute function public.notify_change_request();
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('change-uploads', 'change-uploads', false, 15728640,
+        array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic'])
+on conflict (id) do nothing;
+drop policy if exists "Klient: upload poprawek" on storage.objects;
+create policy "Klient: upload poprawek" on storage.objects
+  for insert to anon, authenticated
+  with check (bucket_id = 'change-uploads' and public.valid_edit_token((storage.foldername(name))[1]));
+drop policy if exists "Zespół: zdjęcia poprawek" on storage.objects;
+create policy "Zespół: zdjęcia poprawek" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'change-uploads' and public.is_team_member());
+
+-- =====================================================================
 --  KONIEC. Po uruchomieniu powinien pojawić się komunikat
 --  „Success. No rows returned”.
 -- =====================================================================

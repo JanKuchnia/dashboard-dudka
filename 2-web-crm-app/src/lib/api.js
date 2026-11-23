@@ -209,6 +209,21 @@ const supabaseApi = {
     return { inserted, skipped: items.length - inserted.length };
   },
 
+  // --- Poprawki od klienta (client-edit.js na demo) ---
+  async fetchChangeRequests(leadId) {
+    const rows = unwrap(
+      await supabase.from('change_requests').select('*').eq('lead_id', leadId).order('created_at', { ascending: false }),
+    );
+    const paths = rows.flatMap((r) => r.files);
+    if (!paths.length) return rows;
+    const signed = unwrap(await supabase.storage.from('change-uploads').createSignedUrls(paths, 3600));
+    const url = Object.fromEntries(signed.map((x) => [x.path, x.signedUrl]));
+    return rows.map((r) => ({ ...r, fileUrls: r.files.map((f) => url[f]).filter(Boolean) }));
+  },
+  async setChangeRequestStatus(id, status) {
+    unwrap(await supabase.from('change_requests').update({ status }).eq('id', id));
+  },
+
   // --- Statystyki ---
   async getStats() {
     return unwrap(await supabase.rpc('get_dashboard_stats'));

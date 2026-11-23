@@ -231,6 +231,12 @@ export const localApi = {
       .logs.filter((g) => g.created_at >= sinceISO)
       .map((g) => ({ ...g, email: 'Ten komputer' }));
   },
+  // Poprawki od klienta działają tylko z Supabase
+  async fetchChangeRequests() {
+    return [];
+  },
+  async setChangeRequestStatus() {},
+
   async fetchCallLogs(leadId) {
     return getDb()
       .logs.filter((g) => g.lead_id === leadId)

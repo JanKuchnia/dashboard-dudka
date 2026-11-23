@@ -79,6 +79,9 @@ cd site || exit 1
 printf '# %s\n\nDemo strony głównej (lead %s).\n\nProjekt Stitch: %s\n' "$NAME" "$LEAD_ID" "$STITCH" > README.md
 touch .nojekyll
 grep -qi 'name="robots"' index.html || sed -i '0,/<head[^>]*>/s//&<meta name="robots" content="noindex">/' index.html
+# Widżet poprawek: klient otwiera demo z ?edit=<edit_token>, zgłoszenia trafiają do CRM (tabela change_requests)
+CRM_URL=${CRM_URL:-https://lead-crm-psi-lemon.vercel.app}
+grep -q 'client-edit.js' index.html || sed -i "0,/<\/head>/s##<script src=\"$CRM_URL/client-edit.js\" data-url=\"$SUPABASE_URL\" data-key=\"$SUPABASE_ANON_KEY\" defer></script>&#" index.html
 
 SLUG=$(slugify "$NAME")
 desc=$(gh repo view "$OWNER/$SLUG" --json description -q .description 2>/dev/null) && EXISTS=1 || EXISTS=0

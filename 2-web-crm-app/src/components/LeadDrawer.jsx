@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trash2, Save, Phone, MapPin, MessageSquareText } from 'lucide-react';
+import { Trash2, Save, Phone, MapPin, MessageSquareText, Copy, PencilLine } from 'lucide-react';
 import { Drawer, Spinner } from './ui';
 import { StatusBadge } from './Badges';
 import { useToast } from './Toast';
@@ -61,6 +61,7 @@ export function LeadDrawer({ open, lead, onClose, onChanged }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [logs, setLogs] = useState(null);
   const [brief, setBrief] = useState('');
+  const [changes, setChanges] = useState(null);
 
   useEffect(() => {
     if (!open) return;
@@ -70,6 +71,13 @@ export function LeadDrawer({ open, lead, onClose, onChanged }) {
     setConfirmDelete(false);
     setBrief('');
     setLogs(null);
+    setChanges(null);
+    if (lead?.site_preview_url) {
+      api
+        .fetchChangeRequests(lead.id)
+        .then(setChanges)
+        .catch(() => setChanges([]));
+    }
     if (lead?.id) {
       api
         .fetchCallLogs(lead.id)
@@ -125,6 +133,26 @@ export function LeadDrawer({ open, lead, onClose, onChanged }) {
       toast({ type: 'error', title: 'Nie udało się zlecić', description: e.message });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const editLink = lead?.site_preview_url && lead.edit_token ? `${lead.site_preview_url}?edit=${lead.edit_token}` : null;
+  const copyEditLink = async () => {
+    try {
+      await navigator.clipboard.writeText(editLink);
+      toast({ type: 'success', title: 'Skopiowano link dla klienta' });
+    } catch {
+      toast({ type: 'error', title: 'Nie udało się skopiować', description: editLink });
+    }
+  };
+
+  const toggleChange = async (c) => {
+    const status = c.status === 'NOWA' ? 'ZROBIONA' : 'NOWA';
+    try {
+      await api.setChangeRequestStatus(c.id, status);
+      setChanges((list) => list.map((x) => (x.id === c.id ? { ...x, status } : x)));
+    } catch (e) {
+      toast({ type: 'error', title: 'Nie udało się zapisać', description: e.message });
     }
   };
 
@@ -299,6 +327,52 @@ export function LeadDrawer({ open, lead, onClose, onChanged }) {
           <a className="text-blue-600 underline" href={lead.site_preview_url} target="_blank" rel="noreferrer">Demo</a>
           {' · '}
           <a className="text-blue-600 underline" href={lead.site_repo_url} target="_blank" rel="noreferrer">Repo</a>
+          {editLink && (
+            <button type="button" className="btn-secondary mt-3 flex" onClick={copyEditLink}>
+              <Copy className="size-4" />
+              Kopiuj link do poprawek dla klienta
+            </button>
+          )}
+        </div>
+      )}
+
+      {!isNew && lead.site_preview_url && (
+        <div className="mt-8">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-zinc-900">
+            <PencilLine className="size-4 text-zinc-400" />
+            Poprawki od klienta
+          </h3>
+          {changes === null ? (
+            <Spinner />
+          ) : changes.length === 0 ? (
+            <p className="text-sm text-zinc-500">Klient jeszcze nic nie zgłosił.</p>
+          ) : (
+            <ul className="space-y-3">
+              {changes.map((c) => (
+                <li key={c.id} className={`rounded-lg border border-zinc-200 p-3 ${c.status === 'ZROBIONA' ? 'opacity-60' : ''}`}>
+                  <div className="mb-2 flex items-center justify-between gap-2 text-xs text-zinc-500">
+                    <span>
+                      {formatDateTime(c.created_at)} · {c.item_count} {c.item_count === 1 ? 'zmiana' : 'zmian'}
+                    </span>
+                    <label className="flex items-center gap-1.5">
+                      <input type="checkbox" checked={c.status === 'ZROBIONA'} onChange={() => toggleChange(c)} />
+                      Zrobione
+                    </label>
+                  </div>
+                  <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs text-zinc-700">{c.markdown}</pre>
+                  {c.fileUrls?.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {c.fileUrls.map((u) => (
+                        <a key={u} href={u} target="_blank" rel="noreferrer">
+                          <img src={u} alt="Zdjęcie od klienta" className="size-16 rounded object-cover" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
