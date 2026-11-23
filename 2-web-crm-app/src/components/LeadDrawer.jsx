@@ -23,6 +23,7 @@ const EMPTY = {
   notes: '',
   deal_stage: '',
   deal_value: '',
+  site_preview_url: '',
 };
 
 const FIELDS = Object.keys(EMPTY);
@@ -106,6 +107,8 @@ export function LeadDrawer({ open, lead, onClose, onChanged }) {
     setSaving(true);
     try {
       const payload = toPayload(form);
+      // Ręcznie wklejony link do strony = strona gotowa (nie ruszamy zleceń w toku)
+      if (payload.site_preview_url && !['ZLECONA', 'W_TOKU'].includes(lead?.site_status)) payload.site_status = 'GOTOWA';
       const saved = isNew ? await api.createLead(payload) : await api.updateLead(lead.id, payload);
       toast({ type: 'success', title: isNew ? 'Dodano firmę' : 'Zapisano zmiany', description: saved.company_name });
       onChanged?.();
@@ -136,13 +139,23 @@ export function LeadDrawer({ open, lead, onClose, onChanged }) {
     }
   };
 
-  const editLink = lead?.site_preview_url && lead.edit_token ? `${lead.site_preview_url}?edit=${lead.edit_token}` : null;
-  const copyEditLink = async () => {
+  let editLink = null;
+  if (lead?.site_preview_url && lead.edit_token) {
     try {
-      await navigator.clipboard.writeText(editLink);
-      toast({ type: 'success', title: 'Skopiowano link dla klienta' });
+      const u = new URL(lead.site_preview_url);
+      u.searchParams.set('edit', lead.edit_token);
+      editLink = u.href;
     } catch {
-      toast({ type: 'error', title: 'Nie udało się skopiować', description: editLink });
+      /* zły link w bazie – bez przycisku */
+    }
+  }
+  const widgetTag = `<script src="${location.origin}/client-edit.js" data-url="${import.meta.env.VITE_SUPABASE_URL}" data-key="${import.meta.env.VITE_SUPABASE_ANON_KEY}" defer></script>`;
+  const copy = async (text, title) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ type: 'success', title });
+    } catch {
+      toast({ type: 'error', title: 'Nie udało się skopiować', description: text });
     }
   };
 
@@ -290,6 +303,9 @@ export function LeadDrawer({ open, lead, onClose, onChanged }) {
             </Field>
           </>
         )}
+        <Field label="Link do gotowej strony (demo)" className="col-span-2">
+          <input className="input" value={form.site_preview_url} onChange={set('site_preview_url')} placeholder="https://… (strona zrobiona ręcznie)" />
+        </Field>
         <Field label="Notatka" className="col-span-2">
           <textarea className="input resize-y" rows={4} value={form.notes} onChange={set('notes')} />
         </Field>
@@ -325,13 +341,25 @@ export function LeadDrawer({ open, lead, onClose, onChanged }) {
         <div className="mt-8 text-sm">
           <h3 className="mb-3 font-semibold text-zinc-900">Demo strony</h3>
           <a className="text-blue-600 underline" href={lead.site_preview_url} target="_blank" rel="noreferrer">Demo</a>
-          {' · '}
-          <a className="text-blue-600 underline" href={lead.site_repo_url} target="_blank" rel="noreferrer">Repo</a>
+          {lead.site_repo_url && (
+            <>
+              {' · '}
+              <a className="text-blue-600 underline" href={lead.site_repo_url} target="_blank" rel="noreferrer">Repo</a>
+            </>
+          )}
           {editLink && (
-            <button type="button" className="btn-secondary mt-3 flex" onClick={copyEditLink}>
-              <Copy className="size-4" />
-              Kopiuj link do poprawek dla klienta
-            </button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" className="btn-secondary" onClick={() => copy(editLink, 'Skopiowano link dla klienta')}>
+                <Copy className="size-4" />
+                Kopiuj link do poprawek dla klienta
+              </button>
+              {!lead.site_repo_url && (
+                <button type="button" className="btn-secondary" onClick={() => copy(widgetTag, 'Skopiowano kod – wklej go przed </head>')}>
+                  <Copy className="size-4" />
+                  Kopiuj kod widżetu
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
